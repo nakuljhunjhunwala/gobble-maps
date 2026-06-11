@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Gobble Maps — Admin Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Albert+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  :root {
+    --gb-deep: #1D7FB8; --gb-sky: #3DA5DE; --gb-sky-50: #EAF5FC; --gb-sky-100: #D7ECF8;
+    --gb-sky-deep: #1D7FB8;
+    --gb-bg: #F4F8FB; --gb-ink: #14313F; --gb-mut: #5E7C8C; --gb-line: #E2EBF1; --gb-line2: #C2D2DC;
+  }
+  * { margin: 0; box-sizing: border-box; }
+  body { background: var(--gb-bg); color: var(--gb-ink); font-family: 'Albert Sans', sans-serif; }
+  button { font-family: inherit; }
+
+  /* ── shared atoms (mirrors app styles) ── */
+  .gb-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: var(--gb-deep); color: #fff; border: none; border-radius: 11px; padding: 12px 18px; font-size: 14px; font-weight: 700; cursor: pointer; transition: filter .15s; }
+  .gb-btn:hover { filter: brightness(1.07); }
+  .gb-btn-sm { padding: 9px 14px; font-size: 12.5px; border-radius: 10px; }
+  .gb-input { border: 1px solid var(--gb-line2); border-radius: 11px; padding: 10px 13px; font-size: 13.5px; font-family: inherit; color: var(--gb-ink); background: #fff; outline: none; width: 100%; }
+  .gb-input:focus { border-color: var(--gb-deep); box-shadow: 0 0 0 3px var(--gb-sky-100); }
+  .gb-seg { display: inline-flex; background: #E6EEF3; border-radius: 10px; padding: 3px; gap: 2px; flex-wrap: wrap; }
+  .gb-seg button { border: none; background: none; border-radius: 8px; padding: 7px 12px; font-size: 12px; font-weight: 700; color: var(--gb-mut); cursor: pointer; }
+  .gb-seg .gb-seg-on { background: #fff; color: var(--gb-ink); box-shadow: 0 1px 3px rgba(20,49,63,0.12); }
+  .gb-chip { display: inline-flex; align-items: center; gap: 5px; background: #fff; border: 1px solid var(--gb-line2); border-radius: 99px; padding: 7px 13px; font-size: 12.5px; font-weight: 600; color: var(--gb-ink); cursor: pointer; transition: all .12s; }
+  .gb-chip-on { background: var(--gb-deep); border-color: var(--gb-deep); color: #fff; }
+  .gb-switch { width: 44px; height: 26px; border-radius: 99px; border: none; background: var(--gb-line2); position: relative; cursor: pointer; transition: background .15s; flex-shrink: 0; }
+  .gb-switch span { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 99px; background: #fff; transition: left .15s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  .gb-switch-on { background: var(--gb-deep); }
+  .gb-switch-on span { left: 21px; }
+  .gb-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; border-radius: 99px; padding: 4px 10px; }
+  .gb-badge-visited { background: var(--gb-sky-50); color: var(--gb-deep); }
+  .gb-badge-unvisited { background: #EFF3F6; color: var(--gb-mut); }
+  .gb-badge-type { background: var(--gb-ink); color: #fff; }
+  .gb-avatar { width: 38px; height: 38px; border-radius: 99px; border: none; background: linear-gradient(140deg, var(--gb-sky), var(--gb-deep)); color: #fff; font-size: 15px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; font-family: 'Bricolage Grotesque', sans-serif; flex-shrink: 0; }
+  .gb-empty { font-size: 13px; color: var(--gb-mut); line-height: 1.5; }
+  .gb-link { background: none; border: none; padding: 0; font-size: 12.5px; font-weight: 700; color: var(--gb-deep); cursor: pointer; text-decoration: none; }
+
+  /* ── admin layout ── */
+  .ad-shell { display: grid; grid-template-columns: 224px 1fr; min-height: 100vh; }
+  .ad-side { background: #fff; border-right: 1px solid var(--gb-line); padding: 18px 14px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; height: 100vh; }
+  .ad-brand { display: flex; align-items: center; gap: 9px; font-family: 'Bricolage Grotesque', sans-serif; font-size: 16.5px; font-weight: 800; letter-spacing: -0.02em; padding: 4px 8px 16px; }
+  .ad-brand-mark { width: 30px; height: 30px; border-radius: 10px; background: linear-gradient(140deg, var(--gb-sky), var(--gb-deep)); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 2px 6px rgba(29,127,184,0.35); }
+  .ad-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+  .ad-navbtn { display: flex; align-items: center; gap: 10px; border: none; background: none; border-radius: 10px; padding: 10px 12px; font-size: 13.5px; font-weight: 600; color: var(--gb-mut); cursor: pointer; text-align: left; }
+  .ad-navbtn:hover { background: var(--gb-bg); color: var(--gb-ink); }
+  .ad-navbtn-on { background: var(--gb-sky-50); color: var(--gb-deep); font-weight: 800; }
+  .ad-navcount { margin-left: auto; background: #B4514B; color: #fff; font-size: 10px; font-weight: 800; border-radius: 99px; min-width: 17px; height: 17px; display: inline-flex; align-items: center; justify-content: center; padding: 0 4px; }
+  .ad-main { padding: 26px 30px 60px; max-width: 1160px; width: 100%; min-width: 0; }
+  .ad-applink { display: flex; align-items: center; gap: 8px; padding: 11px 12px; border-radius: 10px; background: var(--gb-bg); font-size: 12.5px; font-weight: 700; color: var(--gb-ink); text-decoration: none; }
+
+  .ad-h2 { font-family: 'Bricolage Grotesque', sans-serif; font-size: 23px; font-weight: 800; letter-spacing: -0.02em; }
+  .ad-h3 { font-family: 'Bricolage Grotesque', sans-serif; font-size: 16.5px; font-weight: 800; letter-spacing: -0.015em; }
+  .ad-sub { font-size: 12.5px; color: var(--gb-mut); line-height: 1.5; }
+  .ad-pagehead { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
+  .ad-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .ad-search { width: 220px; padding: 9px 13px; font-size: 13px; }
+
+  .ad-card { background: #fff; border: 1px solid var(--gb-line); border-radius: 16px; padding: 16px 18px; min-width: 0; }
+  .ad-card-title { font-size: 12px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--gb-mut); margin-bottom: 12px; }
+  .ad-statgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
+  .ad-stat { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; }
+  .ad-stat-label { font-size: 11.5px; font-weight: 700; color: var(--gb-mut); }
+  .ad-stat-value { font-family: 'Bricolage Grotesque', sans-serif; font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
+  .ad-stat-hint { font-size: 11px; color: var(--gb-line2); font-weight: 700; }
+  .ad-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  .ad-grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+
+  .ad-rows { display: flex; flex-direction: column; gap: 8px; }
+  .ad-row { display: flex; align-items: center; gap: 13px; background: #fff; border: 1px solid var(--gb-line); border-radius: 14px; padding: 12px 14px; min-width: 0; }
+  .ad-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .ad-row-name { font-size: 14px; font-weight: 700; display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+  .ad-row-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+  .ad-row-actions { display: flex; gap: 6px; align-items: center; }
+  .ad-iconbtn { width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--gb-line); background: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: var(--gb-mut); flex-shrink: 0; }
+  .ad-iconbtn:hover { background: var(--gb-sky-50); color: var(--gb-deep); }
+  .ad-iconbtn-danger:hover { background: #FBEAE8; color: #B4514B; border-color: #F0CFCB; }
+  .ad-detail-ic { width: 34px; height: 34px; border-radius: 10px; background: var(--gb-sky-50); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .ad-fopt { display: flex; align-items: center; gap: 7px; padding: 5px 6px; border-radius: 9px; }
+  .ad-fopt:hover { background: var(--gb-bg); }
+
+  .ad-modal-overlay { position: fixed; inset: 0; background: rgba(14,36,48,0.5); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 18px; animation: adfade .15s; }
+  @keyframes adfade { from { opacity: 0; } }
+  .ad-modal { background: #fff; border-radius: 18px; width: 100%; max-width: 460px; max-height: 88vh; display: flex; flex-direction: column; animation: adpop .2s cubic-bezier(.32,.72,.33,1); }
+  @keyframes adpop { from { transform: translateY(14px); opacity: 0; } }
+  .ad-modal-wide { max-width: 720px; }
+  .ad-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px 12px; border-bottom: 1px solid var(--gb-line); }
+  .ad-modal-body { padding: 16px 20px; overflow-y: auto; }
+  .ad-modal-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 20px 16px; border-top: 1px solid var(--gb-line); flex-wrap: wrap; }
+  .ad-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .ad-span2 { grid-column: span 2; }
+  .ad-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .ad-flabel { font-size: 11px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: var(--gb-mut); }
+  .ad-photo-add { width: 64px; height: 64px; border-radius: 10px; border: 1.5px dashed var(--gb-line2); background: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 10px; font-weight: 700; color: var(--gb-mut); }
+  .ad-photo-add:hover { border-color: var(--gb-deep); color: var(--gb-deep); }
+  .ad-photo-x { position: absolute; top: -5px; right: -5px; width: 18px; height: 18px; border-radius: 99px; background: var(--gb-ink); border: 2px solid #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+
+  .ad-toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); background: var(--gb-ink); color: #fff; font-size: 13px; font-weight: 600; border-radius: 99px; padding: 12px 20px; z-index: 80; box-shadow: 0 6px 20px rgba(20,49,63,0.35); animation: adtoast .25s cubic-bezier(.32,.72,.33,1); max-width: 90vw; }
+  @keyframes adtoast { from { transform: translate(-50%, 12px); opacity: 0; } }
+
+  /* ── responsive: tablet / mobile ── */
+  @media (max-width: 980px) {
+    .ad-statgrid { grid-template-columns: repeat(2, 1fr); }
+    .ad-grid2, .ad-grid3 { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 880px) {
+    .ad-shell { grid-template-columns: 1fr; }
+    .ad-side { position: sticky; top: 0; height: auto; flex-direction: row; align-items: center; gap: 8px; padding: 10px 12px; z-index: 30; border-right: none; border-bottom: 1px solid var(--gb-line); overflow-x: auto; scrollbar-width: none; }
+    .ad-side::-webkit-scrollbar { display: none; }
+    .ad-brand { padding: 0 6px 0 2px; }
+    .ad-brand span.ad-brand-text { display: none; }
+    .ad-nav { flex-direction: row; gap: 4px; flex: none; }
+    .ad-navbtn { padding: 8px 11px; white-space: nowrap; font-size: 12.5px; }
+    .ad-applink { white-space: nowrap; margin-left: auto; }
+    .ad-main { padding: 16px 14px 50px; }
+    .ad-row { flex-wrap: wrap; }
+    .ad-row-main { flex-basis: 60%; }
+    .ad-row-actions { margin-left: auto; }
+    .ad-form { grid-template-columns: 1fr; }
+    .ad-span2 { grid-column: span 1; }
+    .ad-search { width: 100%; }
+  }
+  @media (max-width: 560px) {
+    .ad-statgrid { grid-template-columns: repeat(2, 1fr); }
+    .ad-stat-value { font-size: 21px; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="gobble/data.js"></script>
+<script src="gobble/admin-data.js"></script>
+<script type="text/babel" src="gobble/components.jsx"></script>
+<script type="text/babel" src="gobble/admin-core.jsx"></script>
+<script type="text/babel" src="gobble/admin-places.jsx"></script>
+<script type="text/babel" src="gobble/admin-ops.jsx"></script>
+
+<script type="text/babel">
+const AD_SECTIONS = [
+  ['dashboard', 'Dashboard', 'home'],
+  ['places', 'Places', 'pinOutline'],
+  ['filters', 'Filters & Categories', 'sliders'],
+  ['users', 'Users', 'user'],
+  ['reports', 'Issue Reports', 'flag'],
+  ['notifs', 'Notifications', 'share'],
+  ['tbt', 'To Be Tried', 'list'],
+];
+
+function adInitPlaces() {
+  const seeded = GOBBLE_PLACES.map(p => ({ ...p, status: p.permanentlyClosed ? 'Permanently Closed' : 'Published' }));
+  // one draft in progress
+  seeded.splice(3, 0, {
+    id: 'draft-sip', name: 'Sip & Saga', type: 'cafe', cuisines: ['Desserts'], vibes: ['Work Friendly'],
+    budget: 2, area: 'Dadar', station: 'Dadar', address: 'Gokhale Road North, Dadar West', phone: '+91 98220 11447',
+    insta: 'sipandsaga', hoursText: [['Mon – Sun', '9:00 AM – 9:00 PM']], open: 9, close: 21, closedDays: [],
+    visited: true, ratings: { food: 4, service: 4.5, ambience: 4 },
+    mustTry: ['Bun maska crème brûlée', 'Single-origin pour over'], note: 'Photos pending — visited last Sunday.', bestTime: 'Weekday mornings',
+    liveMusic: false, boardGames: false, pureVeg: true, meals: ['breakfast'], pos: { x: 47, y: 55 }, hue: 260,
+    photos: 2, status: 'Draft',
+  });
+  return seeded;
+}
+
+function adInitUsers() {
+  let proto = [];
+  try {
+    const store = JSON.parse(localStorage.getItem('gobble_proto_state_v1'));
+    if (store && store.accounts) {
+      proto = Object.entries(store.accounts).map(([username, a]) => ({
+        username, joined: 'Today', lastActive: 'Now',
+        been: a.beenThere.length, wish: a.wishlist.length, lists: a.lists.length, fromPrototype: true,
+      }));
+    }
+  } catch (e) {}
+  return [...proto, ...ADMIN_USERS];
+}
+
+function AdminApp() {
+  const [section, setSection] = React.useState('dashboard');
+  const [places, setPlaces] = React.useState(adInitPlaces);
+  const [filterDefs, setFilterDefs] = React.useState(() => JSON.parse(JSON.stringify(GOBBLE_FILTER_DEFS)));
+  const [users, setUsers] = React.useState(adInitUsers);
+  const [reports, setReports] = React.useState(ADMIN_REPORTS);
+  const [notifs, setNotifs] = React.useState(ADMIN_NOTIFS);
+  const [tbt, setTbt] = React.useState(ADMIN_TBT);
+  const [editor, setEditor] = React.useState(null); // {placeId, prefill}
+  const [preview, setPreview] = React.useState(null);
+  const [toastMsg, setToastMsg] = React.useState(null);
+  const toastTimer = React.useRef(null);
+
+  const toast = (msg) => {
+    clearTimeout(toastTimer.current);
+    setToastMsg({ msg, key: Date.now() });
+    toastTimer.current = setTimeout(() => setToastMsg(null), 2800);
+  };
+
+  const ctx = {
+    places, setPlaces, filterDefs, setFilterDefs, users, setUsers,
+    reports, setReports, notifs, setNotifs, tbt, setTbt, toast,
+    placeById: (id) => places.find(p => p.id === id),
+    openEditor: (placeId, prefill) => setEditor({ placeId, prefill }),
+    openPreview: setPreview,
+  };
+
+  const openCount = reports.filter(r => r.status === 'Open').length;
+
+  return (
+    <AdminCtx.Provider value={ctx}>
+      <div className="ad-shell">
+        <aside className="ad-side">
+          <div className="ad-brand">
+            <span className="ad-brand-mark"><GIcon name="pinOutline" size={17} color="#fff" strokeWidth={2.2} /></span>
+            <span className="ad-brand-text">Gobble Admin</span>
+          </div>
+          <nav className="ad-nav">
+            {AD_SECTIONS.map(([k, label, icon]) => (
+              <button key={k} className={'ad-navbtn' + (section === k ? ' ad-navbtn-on' : '')} onClick={() => setSection(k)}>
+                <GIcon name={icon} size={16} strokeWidth={section === k ? 2.2 : 1.8} /> {label}
+                {k === 'reports' && openCount > 0 && <span className="ad-navcount">{openCount}</span>}
+              </button>
+            ))}
+          </nav>
+          <a className="ad-applink" href="Gobble Maps Prototype.html">
+            <GIcon name="map" size={15} color="var(--gb-deep)" /> View the app →
+          </a>
+        </aside>
+
+        <main className="ad-main">
+          {section === 'dashboard' && <ADashboard />}
+          {section === 'places' && <APlaces />}
+          {section === 'filters' && <AFilterMgmt />}
+          {section === 'users' && <AUsers />}
+          {section === 'reports' && <AReports />}
+          {section === 'notifs' && <ANotifications />}
+          {section === 'tbt' && <AToBeTried />}
+        </main>
+      </div>
+
+      {editor && <APlaceEditor placeId={editor.placeId} prefill={editor.prefill} onClose={() => setEditor(null)} />}
+      {preview && <APreview place={preview} onClose={() => setPreview(null)} />}
+      {toastMsg && <div className="ad-toast" key={toastMsg.key}>{toastMsg.msg}</div>}
+    </AdminCtx.Provider>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<AdminApp />);
+</script>
+</body>
+</html>
