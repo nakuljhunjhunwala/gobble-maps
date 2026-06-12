@@ -20,7 +20,7 @@ export default function Loading() {
             gap: 9,
           }}
         >
-          <SkelBlock />
+          <SkelBlock w={30} h={30} radius={10} />
           <SkelLine w={110} h={14} />
         </header>
 
@@ -53,9 +53,4 @@ export default function Loading() {
       </div>
     </div>
   );
-}
-
-/** Brand-mark sized square, kept local to avoid an extra import alias. */
-function SkelBlock() {
-  return <SkelCircle size={30} style={{ borderRadius: 10 }} />;
 }
