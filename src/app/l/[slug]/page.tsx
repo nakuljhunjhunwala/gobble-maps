@@ -7,6 +7,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import "@/app/app.css";
 import { PublicList } from "@/components/app/public-list";
+import { SITE_NAME } from "@/lib/site";
 import { getPublicList } from "./queries";
 
 interface PageProps {
@@ -18,8 +19,28 @@ export async function generateMetadata({
 }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const list = await getPublicList(slug);
-  if (!list) return { title: "Gobble Maps" };
-  return { title: `${list.name} — Gobble Maps` };
+  if (!list) {
+    return {
+      title: "List not found",
+      robots: { index: false, follow: false },
+    };
+  }
+
+  const description = `${list.places.length} place${
+    list.places.length === 1 ? "" : "s"
+  } in Mumbai curated by @${list.username} on ${SITE_NAME}.`;
+
+  return {
+    // Root template appends "— Gobble Maps".
+    title: list.name,
+    description,
+    alternates: { canonical: `/l/${slug}` },
+    openGraph: {
+      url: `/l/${slug}`,
+      title: list.name,
+      description,
+    },
+  };
 }
 
 export default async function PublicListPage({ params }: PageProps) {

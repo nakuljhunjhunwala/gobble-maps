@@ -129,12 +129,12 @@ function buildPinElement(
   return { el, root };
 }
 
-/** Builds the blue user-location dot marker element. */
-function buildUserDotElement(): HTMLSpanElement {
-  const el = document.createElement("span");
+/** Builds the blue user-location dot marker element (Google-Maps style). */
+function buildUserDotElement(): HTMLDivElement {
+  // A center-anchored maplibre Marker positions this element; it just needs a
+  // real box (div, not inline span) so its width/height/pulse render.
+  const el = document.createElement("div");
   el.className = "gb-userdot";
-  el.style.position = "relative";
-  el.style.transform = "none";
   const pulse = document.createElement("span");
   pulse.className = "gb-userdot-pulse";
   el.appendChild(pulse);

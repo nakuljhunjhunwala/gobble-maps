@@ -11,8 +11,8 @@ import { GCardRow, toCardData } from "@/components/app/cards";
 import { GOfflineBanner } from "@/components/app/atoms";
 import { useUser } from "@/components/app/providers";
 import { searchAction } from "@/app/(app)/search/actions";
+import type { SearchResult } from "@/lib/consumer/queries";
 import { logEvent } from "@/lib/consumer/analytics";
-import type { ConsumerPlace } from "@/lib/consumer/types";
 
 const SUGGESTIONS = [
   "Japanese",
@@ -26,7 +26,7 @@ const SUGGESTIONS = [
 export function SearchScreen() {
   const { been } = useUser();
   const [q, setQ] = useState("");
-  const [results, setResults] = useState<ConsumerPlace[]>([]);
+  const [results, setResults] = useState<SearchResult[]>([]);
   // Whether a search for the current query has resolved — avoids flashing the
   // "No places found." empty state before the debounced request returns.
   const [resolved, setResolved] = useState(false);
@@ -129,12 +129,47 @@ export function SearchScreen() {
           }}
         >
           {results.map((p) => (
-            <GCardRow
-              key={p.id}
-              place={toCardData(p, now)}
-              been={been.has(p.id)}
-              closedNote={true}
-            />
+            <div key={p.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <GCardRow
+                place={toCardData(p, now)}
+                been={been.has(p.id)}
+                closedNote={true}
+              />
+              {p.matchReasons.length > 0 && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 6,
+                    alignItems: "center",
+                    paddingLeft: 4,
+                  }}
+                >
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "var(--gb-mut)" }}>
+                    Why:
+                  </span>
+                  {p.matchReasons.map((r, i) => (
+                    <span
+                      key={i}
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: "var(--gb-deep)",
+                        background: "var(--gb-sky-50)",
+                        borderRadius: 99,
+                        padding: "2px 9px",
+                        maxWidth: "100%",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {r}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
           {resolved && results.length === 0 && (
             <div

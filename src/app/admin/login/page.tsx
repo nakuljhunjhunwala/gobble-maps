@@ -1,11 +1,16 @@
 import "@/app/admin/admin.css";
 
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Icon } from "@/components/icons";
 import { LoginForm } from "@/components/admin/login-form";
 
-export const metadata = { title: "Gobble Admin — Sign in" };
+// Sibling of the (panel) segment — does NOT inherit its robots; set our own.
+export const metadata: Metadata = {
+  title: { absolute: "Gobble Admin — Sign in" },
+  robots: { index: false, follow: false },
+};
 
 export default async function AdminLoginPage() {
   // Already signed in as an admin? Straight to the panel.

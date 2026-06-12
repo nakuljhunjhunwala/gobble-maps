@@ -7,9 +7,16 @@ import { notFound } from "next/navigation";
 import { getPlace } from "@/lib/consumer/queries";
 import { GOBBLE_TYPES } from "@/lib/consumer/place-types";
 import { PlaceDetail } from "@/components/app/place-detail";
+import { placeJsonLd } from "@/lib/seo/json-ld";
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+/** Meta descriptions cap out around 160 chars in search snippets. */
+function truncate(text: string, max = 160): string {
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1).trimEnd()}…`;
 }
 
 export async function generateMetadata({
@@ -17,17 +24,39 @@ export async function generateMetadata({
 }: PageProps): Promise<Metadata> {
   const { id } = await params;
   const place = await getPlace(id);
-  if (!place) return { title: "Gobble Maps" };
+  if (!place) {
+    return {
+      title: "Place not found",
+      robots: { index: false, follow: false },
+    };
+  }
 
-  const description =
+  if (place.permanentlyClosed) {
+    // Thin page (just the closed notice) — keep it out of the index.
+    return {
+      title: place.name,
+      description: `${place.name} is permanently closed.`,
+      robots: { index: false },
+    };
+  }
+
+  const description = truncate(
     place.note ??
-    (place.cuisines.length > 0
-      ? `${place.cuisines.join(", ")} · ${place.area ?? "Mumbai"}`
-      : `${GOBBLE_TYPES[place.type].label} in ${place.area ?? "Mumbai"}`);
+      (place.cuisines.length > 0
+        ? `${place.cuisines.join(", ")} · ${place.area ?? "Mumbai"}`
+        : `${GOBBLE_TYPES[place.type].label} in ${place.area ?? "Mumbai"}`)
+  );
 
   return {
-    title: `${place.name} — Gobble Maps`,
+    // Root template appends "— Gobble Maps".
+    title: place.name,
     description,
+    alternates: { canonical: `/place/${id}` },
+    openGraph: {
+      url: `/place/${id}`,
+      title: place.name,
+      description,
+    },
   };
 }
 
@@ -56,5 +85,13 @@ export default async function PlacePage({ params }: PageProps) {
     );
   }
 
-  return <PlaceDetail place={place} />;
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: placeJsonLd(place) }}
+      />
+      <PlaceDetail place={place} />
+    </>
+  );
 }

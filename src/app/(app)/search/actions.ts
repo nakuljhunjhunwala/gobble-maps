@@ -5,10 +5,9 @@
 // admin client to surface permanently-closed matches hidden by RLS), so the
 // client search screen calls this thin wrapper, debounced, instead.
 
-import { searchPlaces } from "@/lib/consumer/queries";
-import type { ConsumerPlace } from "@/lib/consumer/types";
+import { searchPlaces, type SearchResult } from "@/lib/consumer/queries";
 
 /** Debounced, client-callable search over published + permanently-closed places. */
-export async function searchAction(q: string): Promise<ConsumerPlace[]> {
+export async function searchAction(q: string): Promise<SearchResult[]> {
   return searchPlaces(q);
 }

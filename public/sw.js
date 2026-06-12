@@ -14,7 +14,7 @@
 // Bump SW_VERSION on EVERY release so all cache names change — this is what
 // lets the activate handler purge the previous deploy's caches (including the
 // stale precached "/"). Forgetting to bump means "/" goes stale across deploys.
-const SW_VERSION = "v1";
+const SW_VERSION = "v2";
 
 const SHELL_CACHE = `gb-shell-${SW_VERSION}`;
 const TILES_CACHE = `gb-tiles-${SW_VERSION}`;

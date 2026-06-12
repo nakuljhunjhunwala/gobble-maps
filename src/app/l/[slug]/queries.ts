@@ -5,6 +5,7 @@
 // is never trusted.
 
 import "server-only";
+import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mapRowToConsumerPlace, type ConsumerPlaceQueryRow } from "@/lib/consumer/queries";
 import type { ConsumerPlace } from "@/lib/consumer/types";
@@ -24,8 +25,11 @@ export interface PublicList {
  * Fetch a shareable list by its slug. Returns null when the slug does not
  * match a list, the list is private, or the owner profile is missing — the
  * caller maps null to notFound(). Only published places are included.
+ * cache(): deduped across generateMetadata + page within one request.
  */
-export async function getPublicList(slug: string): Promise<PublicList | null> {
+export const getPublicList = cache(async (
+  slug: string
+): Promise<PublicList | null> => {
   const admin = createAdminClient();
 
   const { data: list, error: listError } = await admin
@@ -81,4 +85,4 @@ export async function getPublicList(slug: string): Promise<PublicList | null> {
     username: profile.username,
     places,
   };
-}
+});
