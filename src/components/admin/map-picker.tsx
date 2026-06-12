@@ -24,12 +24,22 @@ export interface MapPickerProps {
   lat: number | null;
   lng: number | null;
   onChange: (lat: number, lng: number) => void;
+  /**
+   * Controlled re-position: when this changes to a non-null value the marker
+   * jumps there and the map flies to it (search result). The uncontrolled
+   * drag/click behavior is otherwise unaffected.
+   */
+  flyTo?: { lat: number; lng: number } | null;
 }
 
-export default function MapPicker({ lat, lng, onChange }: MapPickerProps) {
+export default function MapPicker({ lat, lng, onChange, flyTo }: MapPickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const markerRef = useRef<maplibregl.Marker | null>(null);
   const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
   // Only the initial position matters — the marker owns it afterwards.
   const initialRef = useRef({ lat, lng });
 
@@ -53,6 +63,9 @@ export default function MapPicker({ lat, lng, onChange }: MapPickerProps) {
       .setLngLat(center)
       .addTo(map);
 
+    mapRef.current = map;
+    markerRef.current = marker;
+
     marker.on("dragend", () => {
       const pos = marker.getLngLat();
       onChangeRef.current(pos.lat, pos.lng);
@@ -65,8 +78,17 @@ export default function MapPicker({ lat, lng, onChange }: MapPickerProps) {
 
     return () => {
       map.remove();
+      mapRef.current = null;
+      markerRef.current = null;
     };
   }, []);
+
+  // Search result → re-position marker + fly the map there.
+  useEffect(() => {
+    if (!flyTo || !mapRef.current || !markerRef.current) return;
+    markerRef.current.setLngLat([flyTo.lng, flyTo.lat]);
+    mapRef.current.flyTo({ center: [flyTo.lng, flyTo.lat], zoom: 15 });
+  }, [flyTo]);
 
   return (
     <div

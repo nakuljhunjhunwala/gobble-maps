@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import dynamic from "next/dynamic";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,20 +10,74 @@ import { placeSchema, type PlaceInput } from "@/lib/admin/schemas";
 import {
   DAY_KEYS,
   type DayKey,
+  type FilterOptionRow,
   type PlaceType,
   type PlaceWithRelations,
 } from "@/lib/types";
 import type { FilterOptionsByCategory } from "@/lib/admin/queries";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
+import { Icon } from "@/components/icons";
 import { Modal } from "@/components/ui/modal";
 import { Field } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
 import { PhotoUploader } from "@/components/admin/photo-uploader";
 import { PLACE_TYPES } from "@/components/admin/place-preview";
-import {
-  savePhotoOrder,
-  upsertPlace,
-} from "@/app/admin/(panel)/places/actions";
+import { upsertPlace } from "@/app/admin/(panel)/places/actions";
+import { addOption } from "@/app/admin/(panel)/filters/actions";
+
+interface AreaOption {
+  id: string;
+  label: string;
+}
+
+/** "+ Add new area…" sentinel value for the Area <select>. */
+const CUSTOM_AREA = "__custom__";
+
+/**
+ * Extract a lat/lng pair from a Google Maps link or raw coordinate text.
+ * Handles `@19.07,72.87` (Maps URL), `q=19.07,72.87`, `!3d19.07!4d72.87`,
+ * and a plain `19.07, 72.87` pair. Returns null when nothing matches.
+ */
+function extractCoords(text: string): { lat: number; lng: number } | null {
+  const inMumbai = (lat: number, lng: number) =>
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180;
+
+  const at = text.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (at) {
+    const lat = Number(at[1]);
+    const lng = Number(at[2]);
+    if (inMumbai(lat, lng)) return { lat, lng };
+  }
+
+  const q = text.match(/\bq=(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
+  if (q) {
+    const lat = Number(q[1]);
+    const lng = Number(q[2]);
+    if (inMumbai(lat, lng)) return { lat, lng };
+  }
+
+  const bang = text.match(/!3d(-?\d+\.\d+).*?!4d(-?\d+\.\d+)/);
+  if (bang) {
+    const lat = Number(bang[1]);
+    const lng = Number(bang[2]);
+    if (inMumbai(lat, lng)) return { lat, lng };
+  }
+
+  const plain = text.match(/^\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*$/);
+  if (plain) {
+    const lat = Number(plain[1]);
+    const lng = Number(plain[2]);
+    if (inMumbai(lat, lng)) return { lat, lng };
+  }
+
+  return null;
+}
 
 const MapPicker = dynamic(() => import("./map-picker"), {
   ssr: false,
@@ -33,6 +87,8 @@ const MapPicker = dynamic(() => import("./map-picker"), {
 type PlaceFormValues = z.input<typeof placeSchema>;
 
 export interface PlacePrefill {
+  /** Originating To Be Tried row id — retired once the place saves. */
+  tbtId: string | null;
   name: string;
   address: string;
   note: string;
@@ -45,6 +101,11 @@ export interface PlaceEditorProps {
   prefill: PlacePrefill | null;
   filters: FilterOptionsByCategory;
   onClose: () => void;
+  /**
+   * Ask to mark the place permanently closed (existing place only). The parent
+   * owns the confirm dialog + toast wiring; the editor closes on confirm.
+   */
+  onMarkClosed?: (place: PlaceWithRelations, afterClose: () => void) => void;
 }
 
 const DAY_LABELS: Record<DayKey, string> = {
@@ -99,7 +160,13 @@ function firstErrorMessage(node: unknown, depth = 0): string | null {
 }
 
 // Port of prototype APlaceEditor (wide modal, 2-col ad-form grid).
-export function PlaceEditor({ place, prefill, filters, onClose }: PlaceEditorProps) {
+export function PlaceEditor({
+  place,
+  prefill,
+  filters,
+  onClose,
+  onMarkClosed,
+}: PlaceEditorProps) {
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState("");
@@ -109,9 +176,43 @@ export function PlaceEditor({ place, prefill, filters, onClose }: PlaceEditorPro
   const [photoPaths, setPhotoPaths] = useState<string[]>(
     () => place?.photos.map((p) => p.storage_path) ?? []
   );
+  // Paths that were already persisted when the editor opened — these must NOT
+  // be cleaned up on cancel. Anything uploaded THIS session that never reaches
+  // the DB (cancel/close without a successful save) is an orphan to remove.
+  const persistedPaths = useRef<Set<string>>(
+    new Set(place?.photos.map((p) => p.storage_path) ?? [])
+  );
+  const savedRef = useRef(false);
+
+  // On cancel/close without a successful save, delete this session's uploads
+  // from storage (fire-and-forget) so they don't orphan. UX is unchanged.
+  // skipCleanup leaves uploads in place — used when marking closed, so a
+  // curator who uploaded photos then marked closed is not surprised.
+  const handleClose = (skipCleanup = false) => {
+    if (!savedRef.current && !skipCleanup) {
+      const orphans = photoPaths.filter((p) => !persistedPaths.current.has(p));
+      if (orphans.length > 0) {
+        void createClient().storage.from("place-photos").remove(orphans);
+      }
+    }
+    onClose();
+  };
   const [mustTryText, setMustTryText] = useState(
     () => (place?.must_try ?? []).join("\n")
   );
+
+  // Area options: server list, plus any area added inline this session.
+  const [areaOptions, setAreaOptions] = useState<AreaOption[]>(() =>
+    filters.area.map((a) => ({ id: a.id, label: a.label }))
+  );
+  const [addingArea, setAddingArea] = useState(false);
+  const [newAreaLabel, setNewAreaLabel] = useState("");
+
+  // Location search (address / Google Maps link / lat,lng).
+  const [locQuery, setLocQuery] = useState("");
+  const [locSearching, startLocSearch] = useTransition();
+  const [locError, setLocError] = useState(false);
+  const [flyTo, setFlyTo] = useState<{ lat: number; lng: number } | null>(null);
 
   const defaultValues: PlaceFormValues = useMemo(() => {
     if (place) {
@@ -218,6 +319,77 @@ export function PlaceEditor({ place, prefill, filters, onClose }: PlaceEditorPro
   const cuisineCount = filters.cuisine.filter((o) => tagIds.includes(o.id)).length;
   const vibeCount = filters.vibe.filter((o) => tagIds.includes(o.id)).length;
 
+  const applyLocation = (newLat: number, newLng: number) => {
+    setValue("lat", newLat);
+    setValue("lng", newLng);
+    setFlyTo({ lat: newLat, lng: newLng });
+  };
+
+  const runLocationSearch = () => {
+    const text = locQuery.trim();
+    if (!text) return;
+    setLocError(false);
+
+    const coords = extractCoords(text);
+    if (coords) {
+      applyLocation(coords.lat, coords.lng);
+      return;
+    }
+
+    startLocSearch(async () => {
+      try {
+        const res = await fetch(`/api/geocode?q=${encodeURIComponent(text)}`);
+        if (!res.ok) {
+          setLocError(true);
+          return;
+        }
+        const data = (await res.json()) as
+          | { lat: number; lng: number }
+          | { error: string };
+        if ("error" in data) {
+          setLocError(true);
+          return;
+        }
+        applyLocation(data.lat, data.lng);
+      } catch {
+        setLocError(true);
+      }
+    });
+  };
+
+  const onAreaSelect = (value: string) => {
+    if (value === CUSTOM_AREA) {
+      setAddingArea(true);
+      return;
+    }
+    setAddingArea(false);
+    setValue("areaId", value || null);
+  };
+
+  const submitNewArea = () => {
+    const label = newAreaLabel.trim();
+    if (!label) return;
+    startTransition(async () => {
+      const res = await addOption("area", label);
+      if (!res.ok) {
+        toast(res.error);
+        return;
+      }
+      const opt: FilterOptionRow = res.option;
+      setAreaOptions((prev) => [...prev, { id: opt.id, label: opt.label }]);
+      setValue("areaId", opt.id);
+      setAddingArea(false);
+      setNewAreaLabel("");
+      toast(`“${opt.label}” added — live in the user filter panel now`);
+    });
+  };
+
+  const askMarkClosed = () => {
+    // Skip orphan-photo cleanup: a curator who uploaded photos then marked the
+    // place closed should not have those uploads silently removed.
+    if (place && onMarkClosed) onMarkClosed(place, () => handleClose(true));
+  };
+
   const doSave = (status: "draft" | "published") => {
     setErr("");
     setValue("intendedStatus", status);
@@ -232,14 +404,14 @@ export function PlaceEditor({ place, prefill, filters, onClose }: PlaceEditorPro
     void handleSubmit(
       (data) => {
         startTransition(async () => {
-          const saved = await upsertPlace({ ...data, id: placeId });
+          const saved = await upsertPlace({
+            ...data,
+            id: placeId,
+            tbtId: prefill?.tbtId ?? undefined,
+            photoPaths,
+          });
           if (!saved.ok) {
             setErr(saved.error);
-            return;
-          }
-          const photos = await savePhotoOrder(placeId, photoPaths);
-          if (!photos.ok) {
-            setErr(photos.error);
             return;
           }
           toast(
@@ -247,7 +419,8 @@ export function PlaceEditor({ place, prefill, filters, onClose }: PlaceEditorPro
               ? `“${data.name}” published — live on the map & notification queued 🔔`
               : `“${data.name}” saved as draft`
           );
-          onClose();
+          savedRef.current = true;
+          handleClose();
         });
       },
       (errors) => {
@@ -292,20 +465,62 @@ export function PlaceEditor({ place, prefill, filters, onClose }: PlaceEditorPro
     </div>
   );
 
+  // Same as switchRow but wrapped in its own bordered box (feature toggles).
+  const boxedSwitch = (label: string, on: boolean, set: (v: boolean) => void) => (
+    <div
+      style={{
+        border: "1px solid var(--gb-line)",
+        borderRadius: 12,
+        padding: "10px 14px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+      }}
+    >
+      <span style={{ fontSize: 13, fontWeight: 600 }}>{label}</span>
+      <button
+        type="button"
+        className={cn("gb-switch", on && "gb-switch-on")}
+        onClick={() => set(!on)}
+      >
+        <span></span>
+      </button>
+    </div>
+  );
+
   return (
     <Modal
       title={place ? `Edit place — ${place.name}` : "Add new place"}
-      onClose={onClose}
+      onClose={() => handleClose()}
       wide
       footer={
         <>
+          {place &&
+            place.status !== "permanently_closed" &&
+            onMarkClosed && (
+              <button
+                type="button"
+                className="gb-btn gb-btn-sm"
+                style={{
+                  marginRight: "auto",
+                  background: "transparent",
+                  color: "#B4514B",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+                disabled={pending}
+                onClick={askMarkClosed}
+              >
+                <Icon name="flag" size={14} /> Mark permanently closed
+              </button>
+            )}
           {err && (
             <span
               style={{
                 fontSize: 12.5,
                 fontWeight: 700,
                 color: "#B4514B",
-                marginRight: "auto",
               }}
             >
               {err}
@@ -351,16 +566,41 @@ export function PlaceEditor({ place, prefill, filters, onClose }: PlaceEditorPro
         <Field label="Area">
           <select
             className="gb-input"
-            value={areaId ?? ""}
-            onChange={(e) => setValue("areaId", e.target.value || null)}
+            value={addingArea ? CUSTOM_AREA : areaId ?? ""}
+            onChange={(e) => onAreaSelect(e.target.value)}
           >
             {areaId == null && <option value="">—</option>}
-            {filters.area.map((a) => (
+            {areaOptions.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.label}
               </option>
             ))}
+            <option value={CUSTOM_AREA}>+ Add new area…</option>
           </select>
+          {addingArea && (
+            <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+              <input
+                className="gb-input"
+                placeholder="New area name"
+                value={newAreaLabel}
+                onChange={(e) => setNewAreaLabel(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    submitNewArea();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="gb-btn gb-btn-sm"
+                disabled={pending}
+                onClick={submitNewArea}
+              >
+                Add
+              </button>
+            </div>
+          )}
         </Field>
         <Field label="Nearest station">
           <input className="gb-input" {...register("station")} />
@@ -579,16 +819,14 @@ export function PlaceEditor({ place, prefill, filters, onClose }: PlaceEditorPro
         </div>
 
         <div
-          className="ad-span2"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr 1fr",
-            gap: 10,
-          }}
+          className="ad-span2 ad-grid3"
+          style={{ marginBottom: 0, gap: 10 }}
         >
-          {switchRow("Pure Veg", pureVeg, (v) => setValue("pureVeg", v))}
-          {switchRow("Live Music", liveMusic, (v) => setValue("liveMusic", v))}
-          {switchRow("Board Games", boardGames, (v) => setValue("boardGames", v))}
+          {boxedSwitch("Pure Veg", pureVeg, (v) => setValue("pureVeg", v))}
+          {boxedSwitch("Live Music", liveMusic, (v) => setValue("liveMusic", v))}
+          {boxedSwitch("Board Games", boardGames, (v) =>
+            setValue("boardGames", v)
+          )}
         </div>
 
         <div className="ad-span2">
@@ -600,9 +838,47 @@ export function PlaceEditor({ place, prefill, filters, onClose }: PlaceEditorPro
                 : "Click the map or drag the pin to set the exact location."
             }
           >
+            <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              <input
+                className="gb-input"
+                placeholder="Search address, or paste a Google Maps link / lat,lng"
+                value={locQuery}
+                onChange={(e) => {
+                  setLocQuery(e.target.value);
+                  if (locError) setLocError(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    runLocationSearch();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="gb-btn gb-btn-sm"
+                disabled={locSearching}
+                onClick={runLocationSearch}
+              >
+                <Icon name="search" size={14} /> Search
+              </button>
+            </div>
+            {locError && (
+              <p
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#B4514B",
+                  margin: "0 0 8px",
+                }}
+              >
+                Couldn’t find that location.
+              </p>
+            )}
             <MapPicker
               lat={lat ?? null}
               lng={lng ?? null}
+              flyTo={flyTo}
               onChange={(newLat, newLng) => {
                 setValue("lat", newLat);
                 setValue("lng", newLng);

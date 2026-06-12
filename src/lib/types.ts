@@ -126,6 +126,7 @@ export interface ProfileRow {
   username: string;
   pin_hash: string;
   mobile: string | null;
+  token_version: number;
   created_at: string;
   last_active_at: string | null;
 }

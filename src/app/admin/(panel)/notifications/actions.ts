@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/admin/queries";
 import { notificationSchema } from "@/lib/admin/schemas";
 
-type Supabase = Awaited<ReturnType<typeof createClient>>;
+type Supabase = Awaited<ReturnType<typeof requireAdmin>>["supabase"];
 
 export type NotificationActionResult =
   | { ok: true; recipients: number }
@@ -58,7 +58,7 @@ export async function sendNotification(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
-  const supabase = await createClient();
+  const { supabase } = await requireAdmin();
   try {
     const recipients = await recipientCount(
       supabase,
@@ -92,7 +92,7 @@ export async function scheduleNotification(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
-  const supabase = await createClient();
+  const { supabase } = await requireAdmin();
   try {
     const recipients = await recipientCount(
       supabase,

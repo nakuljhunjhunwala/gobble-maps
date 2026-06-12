@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { UserWithCounts } from "@/lib/admin/queries";
-import { formatDate, relativeLastActive } from "@/lib/admin/queries";
+import { formatDate, relativeLastActive } from "@/lib/admin/format";
 import { deleteUser } from "@/app/admin/(panel)/users/actions";
 import { PageHeader } from "@/components/admin/page-header";
 import { DataRow } from "@/components/admin/data-row";

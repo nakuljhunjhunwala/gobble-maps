@@ -23,11 +23,13 @@ export default async function PlacesPage({ searchParams }: PlacesPageProps) {
   // ?edit=<placeId> — open the editor for that place on load.
   const initialEditId = typeof params.edit === "string" ? params.edit : null;
 
-  // ?new=1&name=&address=&note= — deep link from To Be Tried: open the
-  // editor prefilled with visited=true.
+  // ?new=1&tbt=<id>&name=&address=&note= — deep link from To Be Tried: open
+  // the editor prefilled with visited=true. tbt is the originating pipeline
+  // row, retired once the place saves.
   const initialPrefill =
     params.new === "1"
       ? {
+          tbtId: typeof params.tbt === "string" ? params.tbt : null,
           name: str(params.name),
           address: str(params.address),
           note: str(params.note),

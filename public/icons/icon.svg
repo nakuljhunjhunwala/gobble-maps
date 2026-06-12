@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3DA5DE"/>
+      <stop offset="1" stop-color="#1D7FB8"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#g)"/>
+  <!-- map pin -->
+  <path d="M256 96c-66 0-114 49-114 110 0 78 92 178 106 192a11 11 0 0 0 16 0c14-14 106-114 106-192 0-61-48-110-114-110z" fill="#fff"/>
+  <!-- fork & knife inside pin head -->
+  <g stroke="#1D7FB8" stroke-width="17" stroke-linecap="round" fill="none">
+    <path d="M225 158v44m0 0v54m-22-98v32a22 22 0 0 0 44 0v-32"/>
+    <path d="M291 256v-44c0-30 18-54 18-54v98"/>
+  </g>
+</svg>

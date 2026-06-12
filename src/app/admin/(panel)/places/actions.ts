@@ -7,14 +7,23 @@ import { placeSchema, type PlaceInput } from "@/lib/admin/schemas";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
-export type UpsertPlaceInput = PlaceInput & { id?: string };
+export type UpsertPlaceInput = PlaceInput & {
+  id?: string;
+  tbtId?: string;
+  /** Storage paths for place_photos, in display order. */
+  photoPaths?: string[];
+};
 
 const BUCKET = "place-photos";
 
+const photoPathsSchema = z.array(z.string().min(1).max(300)).max(6);
+
 /**
  * Create or update a place (id is client-generated for new places so photo
- * uploads and the row share the same id). Replaces place_tags, and on a
- * draft/new → published transition queues the new_place notification.
+ * uploads and the row share the same id). Replaces place_tags and place_photos,
+ * and on a draft/new → published transition queues the new_place notification.
+ * Photos are persisted in this same action BEFORE the notification is queued,
+ * so a published place can never go live with zero photos while the push fires.
  */
 export async function upsertPlace(
   input: UpsertPlaceInput
@@ -22,6 +31,10 @@ export async function upsertPlace(
   const idParsed = z.uuid().optional().safeParse(input.id);
   if (!idParsed.success) {
     return { ok: false, error: "Invalid place id." };
+  }
+  const photoPathsParsed = photoPathsSchema.safeParse(input.photoPaths ?? []);
+  if (!photoPathsParsed.success) {
+    return { ok: false, error: "Invalid photo data." };
   }
   const parsed = placeSchema.safeParse(input);
   if (!parsed.success) {
@@ -31,6 +44,7 @@ export async function upsertPlace(
     };
   }
   const d = parsed.data;
+  const photoPaths = photoPathsParsed.data;
 
   const { supabase } = await requireAdmin();
   const id = idParsed.data ?? crypto.randomUUID();
@@ -74,23 +88,86 @@ export async function upsertPlace(
     return { ok: false, error: upsertError.message };
   }
 
-  // Replace place_tags (cuisines + vibes).
-  const { error: delTagsError } = await supabase
-    .from("place_tags")
-    .delete()
-    .eq("place_id", id);
-  if (delTagsError) {
-    return { ok: false, error: delTagsError.message };
-  }
+  // Replace place_tags (cuisines + vibes) WITHOUT a window where existing tags
+  // are lost: write the new set first (upsert on the PK), and only after that
+  // succeeds delete the tags that are no longer in the new set.
   if (d.tagIds.length > 0) {
-    const { error: insTagsError } = await supabase.from("place_tags").insert(
+    const { error: insTagsError } = await supabase.from("place_tags").upsert(
       d.tagIds.map((tagId) => ({
         place_id: id,
         filter_option_id: tagId,
-      }))
+      })),
+      { onConflict: "place_id,filter_option_id" }
     );
     if (insTagsError) {
       return { ok: false, error: insTagsError.message };
+    }
+  }
+  {
+    // Select-diff-delete: read existing tag ids, compute the ones not in the
+    // new kept set in JS, delete by exact id list. Robust regardless of value
+    // contents; an empty kept set still deletes every stale row.
+    const { data: existingTags, error: selTagsError } = await supabase
+      .from("place_tags")
+      .select("filter_option_id")
+      .eq("place_id", id);
+    if (selTagsError) {
+      return { ok: false, error: selTagsError.message };
+    }
+    const kept = new Set(d.tagIds);
+    const staleTagIds = (existingTags ?? [])
+      .map((t) => t.filter_option_id)
+      .filter((tagId) => !kept.has(tagId));
+    if (staleTagIds.length > 0) {
+      const { error: delTagsError } = await supabase
+        .from("place_tags")
+        .delete()
+        .eq("place_id", id)
+        .in("filter_option_id", staleTagIds);
+      if (delTagsError) {
+        return { ok: false, error: delTagsError.message };
+      }
+    }
+  }
+
+  // Persist place_photos in this same action (upsert new set on the unique
+  // storage_path, then select-diff-delete stale rows) BEFORE queuing any
+  // notification — so a publish never goes live with zero photos.
+  if (photoPaths.length > 0) {
+    const { error: insPhotosError } = await supabase
+      .from("place_photos")
+      .upsert(
+        photoPaths.map((storagePath, i) => ({
+          place_id: id,
+          storage_path: storagePath,
+          sort_order: i,
+        })),
+        { onConflict: "storage_path" }
+      );
+    if (insPhotosError) {
+      return { ok: false, error: insPhotosError.message };
+    }
+  }
+  {
+    const { data: existingPhotos, error: selPhotosError } = await supabase
+      .from("place_photos")
+      .select("id, storage_path")
+      .eq("place_id", id);
+    if (selPhotosError) {
+      return { ok: false, error: selPhotosError.message };
+    }
+    const keptPaths = new Set(photoPaths);
+    const stalePhotoIds = (existingPhotos ?? [])
+      .filter((p) => !keptPaths.has(p.storage_path))
+      .map((p) => p.id);
+    if (stalePhotoIds.length > 0) {
+      const { error: delPhotosError } = await supabase
+        .from("place_photos")
+        .delete()
+        .in("id", stalePhotoIds);
+      if (delPhotosError) {
+        return { ok: false, error: delPhotosError.message };
+      }
     }
   }
 
@@ -123,46 +200,13 @@ export async function upsertPlace(
     revalidatePath("/admin/notifications");
   }
 
-  revalidatePath("/admin/places");
-  return { ok: true };
-}
-
-const photoOrderSchema = z.object({
-  placeId: z.uuid(),
-  paths: z.array(z.string().min(1).max(300)).max(6),
-});
-
-/** Replace place_photos rows for a place with the given paths, in order. */
-export async function savePhotoOrder(
-  placeId: string,
-  paths: string[]
-): Promise<ActionResult> {
-  const parsed = photoOrderSchema.safeParse({ placeId, paths });
-  if (!parsed.success) {
-    return { ok: false, error: "Invalid photo data." };
-  }
-
-  const { supabase } = await requireAdmin();
-
-  const { error: delError } = await supabase
-    .from("place_photos")
-    .delete()
-    .eq("place_id", parsed.data.placeId);
-  if (delError) {
-    return { ok: false, error: delError.message };
-  }
-
-  if (parsed.data.paths.length > 0) {
-    const { error: insError } = await supabase.from("place_photos").insert(
-      parsed.data.paths.map((storagePath, i) => ({
-        place_id: parsed.data.placeId,
-        storage_path: storagePath,
-        sort_order: i,
-      }))
-    );
-    if (insError) {
-      return { ok: false, error: insError.message };
-    }
+  // The place now exists, so the originating To Be Tried row can be retired.
+  // (markVisited only flips it to 'visited' so the pipeline entry survives an
+  // abandoned editor.)
+  const tbtParsed = z.uuid().safeParse(input.tbtId);
+  if (tbtParsed.success) {
+    await supabase.from("to_be_tried").delete().eq("id", tbtParsed.data);
+    revalidatePath("/admin/to-be-tried");
   }
 
   revalidatePath("/admin/places");

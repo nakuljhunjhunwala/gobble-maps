@@ -1,0 +1,23 @@
+/* The shared ToastProvider (@/components/ui/toast) renders `.ad-toast`,
+   which is styled by admin.css — not loaded on consumer routes. Style it
+   here exactly like the prototype's .gb-toast (app.css) so consumer toasts
+   look right. admin.css never loads alongside this file, so no conflict. */
+.ad-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 110px;
+  transform: translateX(-50%);
+  background: var(--gb-ink);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 99px;
+  padding: 11px 18px;
+  z-index: 60;
+  white-space: nowrap;
+  max-width: 88%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 6px 20px rgba(20, 49, 63, 0.35);
+  animation: gbtoast 0.25s cubic-bezier(0.32, 0.72, 0.33, 1);
+}

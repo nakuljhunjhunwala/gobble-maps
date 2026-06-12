@@ -9,11 +9,7 @@ import { PageHeader } from "@/components/admin/page-header";
 import { Field } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
 import { Icon } from "@/components/icons";
-import {
-  addTbt,
-  deleteTbt,
-  markVisited,
-} from "@/app/admin/(panel)/to-be-tried/actions";
+import { addTbt, deleteTbt } from "@/app/admin/(panel)/to-be-tried/actions";
 
 export interface TbtManagerProps {
   items: TbtRow[];
@@ -56,21 +52,18 @@ export function TbtManager({ items }: TbtManagerProps) {
 
   const visited = (item: TbtRow) => {
     if (isPending) return;
-    startTransition(async () => {
-      const res = await markVisited(item.id);
-      if (!res.ok) {
-        toast(res.error);
-        return;
-      }
-      toast(`Moving “${item.name}” to a full listing — fill in the review`);
-      const params = new URLSearchParams({
-        new: "1",
-        name: item.name,
-        address: item.address ?? "",
-        note: item.notes ?? "",
-      });
-      router.push(`/admin/places?${params.toString()}`);
+    // The pipeline row is left untouched here; it stays pending until
+    // upsertPlace deletes it on a successful save (tbt id is deep-linked
+    // below). Abandoning the prefilled editor leaves the row safe.
+    toast(`Moving “${item.name}” to a full listing — fill in the review`);
+    const params = new URLSearchParams({
+      new: "1",
+      tbt: item.id,
+      name: item.name,
+      address: item.address ?? "",
+      note: item.notes ?? "",
     });
+    router.push(`/admin/places?${params.toString()}`);
   };
 
   const remove = (item: TbtRow) => {

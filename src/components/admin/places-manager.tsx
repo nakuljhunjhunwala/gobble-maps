@@ -100,13 +100,14 @@ export function PlacesManager({
     }
   };
 
-  const askMarkClosed = (p: PlaceWithRelations) =>
+  const askMarkClosed = (p: PlaceWithRelations, afterClose?: () => void) =>
     setConfirm({
       msg: `Mark “${p.name}” as permanently closed? It will be removed from the map and from all user lists.`,
       fn: () =>
         startTransition(async () => {
           const res = await markClosed(p.id);
           toast(res.ok ? `“${p.name}” marked permanently closed` : res.error);
+          if (res.ok) afterClose?.();
         }),
     });
 
@@ -258,6 +259,7 @@ export function PlacesManager({
           prefill={editor.prefill}
           filters={filters}
           onClose={closeEditor}
+          onMarkClosed={(p, afterClose) => askMarkClosed(p, afterClose)}
         />
       )}
 

@@ -1,44 +1,67 @@
-# Gooble Foods
+# Gobble Maps
 
-Next.js 16 (App Router, TypeScript, Tailwind CSS v4) base project wired to Supabase.
+Personally curated food & nightlife guide for Mumbai — consumer PWA + founder admin panel in one Next.js 16 app, backed by Supabase.
 
-## Getting Started
+## Run it
 
 ```bash
 npm install
-cp .env.example .env.local   # then fill in your Supabase credentials
+cp .env.example .env.local   # fill in Supabase keys (see Environment)
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Health check at [/api/health](http://localhost:3000/api/health) verifies the Supabase connection.
+- **Consumer app**: [http://localhost:3000](http://localhost:3000) — home, map, search, place detail, profile/lists
+- **Admin panel**: [http://localhost:3000/admin](http://localhost:3000/admin) — login with `ADMIN_EMAIL` / `ADMIN_PASSWORD` from `.env.local`
+- Health check: `/api/health`
 
-## Environment Variables
+## What's here
 
-| Variable | Description |
-|----------|-------------|
+**Consumer (mobile-first PWA, installable, offline pin layer)**
+- Time/day-based home sections (breakfast → brunch → party per PRD FR-1)
+- Real MapLibre + OpenStreetMap map with custom category pins (visited/unvisited colors, Been-There ticks)
+- Search (incl. "permanently closed" messaging), 9-group filter sheet
+- Place detail: photo gallery, curator ratings, must-try dishes, open-now logic, directions, share
+- Optional auth: username + 6-digit PIN (mobile stored for recovery; SMS OTP deferred), soft login prompts
+- Been There / Can't Wait / custom lists with public share links (`/l/<slug>`)
+- Issue reporting → lands in the admin queue
+
+**Admin (`/admin`, responsive: sidebar ⇄ top-nav at 880px)**
+- Dashboard: live KPIs (DAU/WAU/MAU, map opens, shares), charts, top-10s — all computed from real analytics events
+- Places: full CRUD, draft → publish (4-photo minimum), photo upload to Storage, MapLibre location picker, per-day hours, preview-as-user, permanently-closed flow
+- Filters & Categories, Users, Issue Reports, Notifications (composer + history; delivery wiring later), To Be Tried pipeline
+
+## Architecture
+
+- `src/app/(app)/…` consumer routes · `src/app/admin/…` admin routes · `src/app/l/[slug]` public lists
+- `src/lib/consumer/*` consumer data/auth/session · `src/lib/admin/*` admin queries/schemas
+- `src/lib/supabase/{client,server,admin}.ts` — browser / SSR / service-role Supabase clients
+- `supabase/migrations/*.sql` — schema, RLS (`is_admin()` allowlist), dashboard RPC, auth throttle
+- `scripts/seed.ts` — idempotent seed (places, photos, users, analytics): `npx tsx scripts/seed.ts`
+- `design/` — original Claude Design prototype handoff (reference, excluded from lint)
+- `public/sw.js` — hand-rolled service worker (tile/photo caching, offline fallback)
+
+## Environment
+
+| Variable | Purpose |
+|----------|---------|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable (anon) key |
-
-## Supabase Clients
-
-Built on `@supabase/ssr` (official SSR pattern):
-
-- `src/lib/supabase/client.ts` — browser client for Client Components
-- `src/lib/supabase/server.ts` — server client for Server Components, Server Actions, and Route Handlers (create per request)
-- `src/lib/supabase/proxy.ts` + `src/proxy.ts` — refreshes the auth session on every request (Next.js 16 proxy, formerly middleware)
-
-## Included Packages
-
-- **Supabase**: `@supabase/supabase-js`, `@supabase/ssr`
-- **Forms & validation**: `react-hook-form`, `zod`, `@hookform/resolvers`
-- **UI utilities**: `clsx`, `tailwind-merge`, `class-variance-authority`, `lucide-react` (shadcn/ui-ready — run `npx shadcn@latest init` to add components)
-- `src/lib/utils.ts` exports the standard `cn()` class-merge helper
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Public browser key |
+| `SUPABASE_SECRET_KEY` | Server-only service key (seed, consumer auth) — never expose |
+| `AUTH_SECRET` | HMAC key for consumer session cookies |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Admin panel login (bootstrapped by seed) |
 
 ## Scripts
 
 ```bash
-npm run dev     # dev server (Turbopack)
-npm run build   # production build
-npm run start   # serve production build
-npm run lint    # ESLint
+npm run dev      # dev server (Turbopack)
+npm run build    # production build
+npm run lint     # ESLint
+npm run db:seed  # seed database (or: npx tsx scripts/seed.ts)
+supabase db push # apply migrations (project must be linked)
 ```
+
+## Deferred (post-V1 wiring)
+
+- SMS OTP for PIN recovery (needs Twilio/MSG91 + DLT sender ID)
+- Real web-push delivery (composer + history already persist)
+- Google Maps swap-in if ever needed (plain lat/lng stored)

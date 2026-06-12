@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Albert_Sans, Bricolage_Grotesque } from "next/font/google";
 import "./globals.css";
+import { SwRegister } from "@/components/app/sw-register";
 
 const albertSans = Albert_Sans({
   variable: "--font-albert",
@@ -17,6 +18,18 @@ const bricolageGrotesque = Bricolage_Grotesque({
 export const metadata: Metadata = {
   title: "Gobble Maps",
   description: "Personally curated food & nightlife guide for Mumbai",
+  appleWebApp: {
+    capable: true,
+    title: "Gobble Maps",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    apple: "/icons/apple-touch-icon.png",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#1D7FB8",
 };
 
 export default function RootLayout({
@@ -29,7 +42,10 @@ export default function RootLayout({
       lang="en"
       className={`${albertSans.variable} ${bricolageGrotesque.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <SwRegister />
+      </body>
     </html>
   );
 }
