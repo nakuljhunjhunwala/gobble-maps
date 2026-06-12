@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
 import { GCardRow, toCardData } from "@/components/app/cards";
+import { SkelCardRow } from "@/components/app/skeleton";
 import { GOfflineBanner } from "@/components/app/atoms";
 import { useUser } from "@/components/app/providers";
 import { searchAction } from "@/app/(app)/search/actions";
@@ -171,6 +172,8 @@ export function SearchScreen() {
               )}
             </div>
           ))}
+          {!resolved &&
+            [0, 1, 2, 3].map((i) => <SkelCardRow key={`skel-${i}`} />)}
           {resolved && results.length === 0 && (
             <div
               className="gb-empty"

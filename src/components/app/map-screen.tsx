@@ -17,7 +17,9 @@ import type { MapFlyTo } from "./map-canvas";
 
 const MapCanvas = dynamic(() => import("./map-canvas"), {
   ssr: false,
-  loading: () => <div style={{ position: "absolute", inset: 0, background: "#BFDCEE" }} />,
+  loading: () => (
+    <div className="gb-skel" style={{ position: "absolute", inset: 0, borderRadius: 0 }} />
+  ),
 });
 
 interface GeocodeResult {
