@@ -3,7 +3,7 @@
 import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getSessionUserId, requireValidUser } from "./session";
+import { clearSession, getSession, requireValidUser } from "./session";
 import type { ConsumerUser } from "./auth-actions";
 
 // ── Types ────────────────────────────────────────────────────
@@ -79,20 +79,26 @@ async function ownedList(
 // ── Actions ──────────────────────────────────────────────────
 
 export async function getMyData(): Promise<MyData | null> {
-  const userId = await getSessionUserId();
-  if (!userId) return null;
+  // Read path must agree with the write path: a version-stale cookie (after a
+  // PIN change / legacy format) reads as logged-out so the UI shows guest
+  // state and re-prompts, rather than appearing logged in while every
+  // mutation silently fails.
+  const session = await getSession();
+  if (!session) return null;
+  const userId = session.userId;
 
   const admin = createAdminClient();
   const [profileRes, savedRes, listsRes] = await Promise.all([
     admin
       .from("profiles")
-      .select("id, username, mobile, notif_opt_in")
+      .select("id, username, mobile, notif_opt_in, token_version")
       .eq("id", userId)
       .maybeSingle<{
         id: string;
         username: string;
         mobile: string | null;
         notif_opt_in: boolean;
+        token_version: number;
       }>(),
     admin
       .from("saved_places")
@@ -107,7 +113,12 @@ export async function getMyData(): Promise<MyData | null> {
   ]);
 
   const profile = profileRes.data;
-  if (!profile) return null;
+  // Stale token version (PIN changed elsewhere / legacy cookie) → treat as
+  // logged out; clear the dead cookie so the next render is clean guest state.
+  if (!profile || profile.token_version !== session.ver) {
+    await clearSession();
+    return null;
+  }
 
   const saved = (savedRes.data ?? []) as {
     place_id: string;

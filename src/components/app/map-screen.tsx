@@ -196,16 +196,6 @@ export function MapScreen({ places }: MapScreenProps) {
         )}
       </div>
 
-      {/* legend (bottom-left, above the count badge) */}
-      <div className="gb-legend">
-        <span>
-          <span className="gb-legend-dot" style={{ background: "var(--gb-deep)" }}></span> Visited & reviewed
-        </span>
-        <span>
-          <span className="gb-legend-dot" style={{ background: "#9FB3C4" }}></span> Not yet visited
-        </span>
-      </div>
-
       {/* place-count badge (bottom-left, above tab bar clearance) */}
       <span className="gb-map-count">{visible.length} places</span>
 

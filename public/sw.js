@@ -133,8 +133,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // OSM raster tiles: cache-first with LRU cap.
-  if (host.endsWith("tile.openstreetmap.org")) {
+  // Basemap raster tiles (CARTO Positron / OSM): cache-first with LRU cap.
+  if (host.endsWith("basemaps.cartocdn.com") || host.endsWith("tile.openstreetmap.org")) {
     event.respondWith(cacheFirst(request, TILES_CACHE, TILES_MAX));
     return;
   }

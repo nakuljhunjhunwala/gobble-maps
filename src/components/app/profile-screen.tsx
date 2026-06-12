@@ -28,6 +28,28 @@ import {
 import { changePin, logout } from "@/lib/consumer/auth-actions";
 import type { ConsumerPlace } from "@/lib/consumer/types";
 
+type ActionResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Handle a failed mutation: a `login_required` result (stale/expired session)
+ * refreshes to guest state and tells the user to re-login; any other error is
+ * shown verbatim. Returns true when the action failed (caller should stop).
+ */
+function handleActionError(
+  res: ActionResult,
+  refresh: () => Promise<void> | void,
+  toast: (m: string) => void
+): boolean {
+  if (res.ok) return false;
+  if (res.error === "login_required") {
+    void refresh();
+    toast("Your session expired — please log in again.");
+  } else {
+    toast(res.error);
+  }
+  return true;
+}
+
 type ProfileTab = "been" | "wish" | "lists";
 
 export interface ProfileScreenProps {
@@ -104,10 +126,9 @@ export function ProfileScreen({ places }: ProfileScreenProps) {
   // ── Logged-in helpers ──────────────────────────────────────
   const removeSaved = async (placeId: string, kind: "been_there" | "wishlist") => {
     const res = await toggleSaved(placeId, kind);
-    if (res.ok) {
-      await refresh();
-      toast("Removed");
-    }
+    if (handleActionError(res, refresh, toast)) return;
+    await refresh();
+    toast("Removed");
   };
 
   const renderPlaces = (
@@ -267,15 +288,15 @@ function ListsTab({
   const onDelete = async (id: string, name: string) => {
     if (!window.confirm(`Delete the list "${name}"?`)) return;
     const res = await deleteList(id);
-    if (res.ok) {
-      await refresh();
-      toast("List deleted");
-    }
+    if (handleActionError(res, refresh, toast)) return;
+    await refresh();
+    toast("List deleted");
   };
 
   const onTogglePublic = async (id: string) => {
     const res = await toggleListPublic(id);
-    if (res.ok) await refresh();
+    if (handleActionError(res, refresh, toast)) return;
+    await refresh();
   };
 
   const onCopyLink = (shareSlug: string) => {
@@ -288,10 +309,9 @@ function ListsTab({
     const name = newList.trim();
     if (!name) return;
     const res = await createList(name);
-    if (res.ok) {
-      setNewList("");
-      await refresh();
-    }
+    if (handleActionError(res, refresh, toast)) return;
+    setNewList("");
+    await refresh();
   };
 
   return (
@@ -411,10 +431,11 @@ function SettingsPanel({ notifOptIn, refresh, toast }: SettingsPanelProps) {
     const next = !optIn;
     setOptIn(next);
     const res = await setNotifOptIn(next);
-    if (res.ok) {
-      void refresh();
-    } else {
+    if (!res.ok) {
       setOptIn(!next); // revert on failure
+      if (handleActionError(res, refresh, toast)) return;
+    } else {
+      void refresh();
     }
   };
 
@@ -427,7 +448,11 @@ function SettingsPanel({ notifOptIn, refresh, toast }: SettingsPanelProps) {
       setNewPin("");
       toast("PIN updated");
     } else {
-      setPinErr(res.error);
+      setPinErr(
+        res.error === "login_required"
+          ? "Your session expired — please log in again."
+          : res.error
+      );
     }
   };
 
