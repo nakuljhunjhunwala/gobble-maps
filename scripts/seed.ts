@@ -828,6 +828,12 @@ async function tableCount(table: string): Promise<number> {
 // ── Main ─────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
+  if (process.argv.includes("--admin-only")) {
+    const adminEmail = await bootstrapAdmin();
+    console.log(`Admin login: ${adminEmail} / password in .env.local`);
+    return;
+  }
+
   console.log("Gobble Maps seed starting…\n");
 
   const options = await seedFilterOptions();
