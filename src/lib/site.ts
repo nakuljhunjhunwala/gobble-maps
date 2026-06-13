@@ -1,10 +1,8 @@
 // Gobble Maps — single source of truth for brand + site metadata.
 // Imported by layout metadata, OG images, robots, sitemap, manifest, JSON-LD.
-// Note: the domain spells "gooble" while the brand spells "Gobble" — the
-// domain is intentional, do not "fix" either spelling.
 
 export const SITE_URL = (
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://gooblemaps.nakuljhunjhunwala.in"
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://gobblemaps.nakuljhunjhunwala.in"
 ).replace(/\/+$/, "");
 
 export const SITE_NAME = "Gobble Maps";

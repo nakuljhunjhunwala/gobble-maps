@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { GOfflineBanner, GSectionTitle } from "./atoms";
 import { GCardRow, GCardWide, toCardData } from "./cards";
+import { CreatorsCredit } from "./creators-credit";
 import { FilterSheet } from "./filter-sheet";
 import { useAuthUI, useFilters, useUser } from "./providers";
 import { filterPlaces } from "@/lib/consumer/filters";
@@ -322,6 +323,8 @@ export function HomeScreen({ places }: { places: ConsumerPlace[] }) {
           )}
         </div>
       </div>
+
+      <CreatorsCredit style={{ margin: "2px 0 26px" }} />
 
       <FilterSheet
         open={filtersOpen}

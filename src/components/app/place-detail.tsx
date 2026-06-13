@@ -21,6 +21,7 @@ import { ReportSheet } from "./report-sheet";
 import { useUser, useAuthUI } from "./providers";
 import { useToast } from "@/components/ui/toast";
 import { GOBBLE_TYPES } from "@/lib/consumer/place-types";
+import { CURATOR } from "@/lib/creators";
 import { isOpenNow } from "@/lib/consumer/time";
 import { hoursToText } from "@/lib/admin/format";
 import { logEvent } from "@/lib/consumer/analytics";
@@ -497,6 +498,29 @@ export function PlaceDetail({ place }: PlaceDetailProps) {
               )}
             </div>
           </section>
+        )}
+
+        {/* curator attribution — Tirth handpicked the visited places */}
+        {place.visited && (
+          <a
+            href={CURATOR.instagramUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              alignSelf: "center",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 12,
+              fontWeight: 600,
+              color: "var(--gb-mut)",
+              textDecoration: "none",
+            }}
+          >
+            <Icon name="instagram" size={13} color="var(--gb-sky-deep)" />
+            Curated by {CURATOR.name}
+            <Icon name="arrowUR" size={10} color="var(--gb-mut)" strokeWidth={2.2} />
+          </a>
         )}
 
         {/* details */}

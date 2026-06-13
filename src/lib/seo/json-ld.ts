@@ -7,6 +7,18 @@ import type { ConsumerPlace } from "@/lib/consumer/types";
 import type { PlaceType } from "@/lib/types";
 import { photoUrl } from "@/lib/admin/format";
 import { SITE_NAME, SITE_SHORT_NAME, SITE_URL, absoluteUrl } from "@/lib/site";
+import { CURATOR, MAKER, type Creator } from "@/lib/creators";
+
+/** schema.org Person for a creator, linking out to their socials/site. */
+function creatorPerson(c: Creator): Record<string, JsonLdValue> {
+  return {
+    "@type": "Person",
+    name: c.name,
+    sameAs: [c.instagramUrl, c.websiteUrl].filter(
+      (u): u is string => Boolean(u)
+    ),
+  };
+}
 
 /** GOBBLE_TYPES keys → schema.org food-establishment types. */
 const SCHEMA_TYPE: Record<PlaceType, string> = {
@@ -56,6 +68,9 @@ export function webSiteJsonLd(): string {
     name: SITE_NAME,
     alternateName: SITE_SHORT_NAME,
     url: SITE_URL,
+    // Nakul built it; Tirth curates the content.
+    creator: creatorPerson(MAKER),
+    author: creatorPerson(CURATOR),
   });
 }
 
@@ -100,7 +115,7 @@ export function placeJsonLd(place: ConsumerPlace): string {
     review: place.ratings
       ? {
           "@type": "Review",
-          author: { "@type": "Organization", name: SITE_NAME },
+          author: creatorPerson(CURATOR),
           reviewRating: {
             "@type": "Rating",
             ratingValue: place.ratings.avg,

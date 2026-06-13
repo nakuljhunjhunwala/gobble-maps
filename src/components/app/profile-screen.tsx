@@ -15,6 +15,7 @@ import { useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { useToast } from "@/components/ui/toast";
 import { GCardRow, toCardData } from "@/components/app/cards";
+import { CreatorsCredit } from "@/components/app/creators-credit";
 import { Photo } from "@/components/app/photo";
 import { useAuthUI, useUser } from "@/components/app/providers";
 import type { ConsumerList } from "@/lib/consumer/user-actions";
@@ -118,6 +119,7 @@ export function ProfileScreen({ places }: ProfileScreenProps) {
           >
             Founder? Open the admin panel →
           </a>
+          <CreatorsCredit style={{ marginTop: 18 }} />
         </div>
       </div>
     );
@@ -261,6 +263,7 @@ export function ProfileScreen({ places }: ProfileScreenProps) {
         >
           Founder? Open the admin panel →
         </a>
+        <CreatorsCredit style={{ marginTop: 4 }} />
       </div>
     </div>
   );

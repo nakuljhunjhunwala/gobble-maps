@@ -6,7 +6,14 @@
 import Link from "next/link";
 import { Icon } from "@/components/icons";
 import { GCardRow, toCardData } from "@/components/app/cards";
+import { CURATOR, MAKER } from "@/lib/creators";
 import type { ConsumerPlace } from "@/lib/consumer/types";
+
+const CREDIT_LINK: React.CSSProperties = {
+  color: "var(--gb-sky-deep)",
+  fontWeight: 700,
+  textDecoration: "none",
+};
 
 export interface PublicListProps {
   name: string;
@@ -88,6 +95,36 @@ export function PublicList({ name, username, places }: PublicListProps) {
           </Link>
         </div>
       </div>
+
+      <p
+        style={{
+          textAlign: "center",
+          padding: "18px 18px 4px",
+          fontSize: 12,
+          fontWeight: 500,
+          color: "var(--gb-mut)",
+          lineHeight: 1.55,
+        }}
+      >
+        Curated by{" "}
+        <a
+          href={CURATOR.instagramUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={CREDIT_LINK}
+        >
+          {CURATOR.name}
+        </a>{" "}
+        · Built by{" "}
+        <a
+          href={MAKER.instagramUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={CREDIT_LINK}
+        >
+          {MAKER.name}
+        </a>
+      </p>
     </div>
   );
 }
