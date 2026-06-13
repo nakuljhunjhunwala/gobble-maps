@@ -74,6 +74,12 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#1D7FB8",
+  // Stop iOS Safari from auto-zooming when a text field is focused (it
+  // zooms in on inputs under 16px). maximumScale caps that; iOS still
+  // permits intentional pinch-zoom, so accessibility is preserved.
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({
