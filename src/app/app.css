@@ -7,6 +7,13 @@
 /* ── App shell (replaces prototype .gb-app device fill) ────── */
 .g-shell {
   position: relative;
+  /* width:100% gives a definite cross-axis size. Without it, `margin: 0 auto`
+     on this flex item (body is a column flexbox) DISABLES stretch on the
+     cross axis, so WebKit/iOS Safari shrinks the shell to its content width.
+     On /map every child is absolutely positioned (intrinsic width 0), which
+     collapsed the shell — and the map — to 0px wide. Chromium tolerated it;
+     Safari did not. */
+  width: 100%;
   max-width: 480px;
   min-height: 100dvh;
   margin: 0 auto;
