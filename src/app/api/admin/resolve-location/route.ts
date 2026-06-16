@@ -12,7 +12,7 @@ import { extractCoords, extractPlaceName } from "@/lib/maps-coords";
 import { findPlusCode, isFullCode, decode, recoverNearest } from "@/lib/plus-codes";
 
 const MUMBAI_VIEWBOX = "72.75,19.35,73.20,18.85"; // left,top,right,bottom
-const UA = "GobbleMaps/1.0 (admin contact: dev@unicoconnect.com)";
+const UA = "GobbleMaps/1.0 (admin contact: jhunjhunwalanakul@gmail.com)";
 
 /** Hosts we are willing to fetch for link expansion. */
 function isGoogleHost(hostname: string): boolean {

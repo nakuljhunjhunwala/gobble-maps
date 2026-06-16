@@ -32,7 +32,7 @@ export async function GET(request: Request): Promise<NextResponse<GeocodeRespons
   try {
     const res = await fetch(url, {
       headers: {
-        "User-Agent": "GobbleMaps/1.0 (admin contact: dev@unicoconnect.com)",
+        "User-Agent": "GobbleMaps/1.0 (admin contact: jhunjhunwalanakul@gmail.com)",
       },
       cache: "force-cache",
       next: { revalidate: 86400 },

@@ -772,7 +772,7 @@ async function seedAnalytics(): Promise<number> {
 
 async function bootstrapAdmin(): Promise<string> {
   console.log("→ admin bootstrap");
-  const email = process.env.ADMIN_EMAIL ?? "dev@unicoconnect.com";
+  const email = process.env.ADMIN_EMAIL ?? "jhunjhunwalanakul@gmail.com";
   let password = process.env.ADMIN_PASSWORD;
   const generated = !password;
   if (!password) password = randomBytes(18).toString("base64url");
