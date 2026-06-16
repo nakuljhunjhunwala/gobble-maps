@@ -41,6 +41,8 @@ export interface ConsumerPlace {
   boardGames: boolean;
   pureVeg: boolean;
   meals: MealSlot[];
+  /** Instagram / YouTube / other reel URLs attached to the place. */
+  reels: string[];
   /** Storage paths in the `place-photos` bucket, sorted by sort_order. */
   photoPaths: string[];
   /** Deterministic 0–360 hue derived from the place id (placeholder art). */

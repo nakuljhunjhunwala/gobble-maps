@@ -81,6 +81,7 @@ export async function upsertPlace(
     live_music: d.liveMusic,
     board_games: d.boardGames,
     pure_veg: d.pureVeg,
+    reels: d.reels,
     status: d.intendedStatus,
     updated_at: new Date().toISOString(),
   });

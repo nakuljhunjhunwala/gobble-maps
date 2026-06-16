@@ -62,6 +62,7 @@ export const placeSchema = z
     liveMusic: z.boolean().default(false),
     boardGames: z.boolean().default(false),
     pureVeg: z.boolean().default(false),
+    reels: z.array(z.string().trim().url().max(500)).max(12).default([]),
     intendedStatus: z.enum(["draft", "published", "permanently_closed"]),
     // Number of photos currently uploaded for this place
     photoCount: z.number().int().min(0).max(6),

@@ -98,6 +98,7 @@ export interface PlaceRow {
   live_music: boolean;
   board_games: boolean;
   pure_veg: boolean;
+  reels: string[];
   status: PlaceStatus;
   created_at: string;
   updated_at: string;

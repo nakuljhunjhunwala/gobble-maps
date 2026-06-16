@@ -16,11 +16,13 @@ import {
 } from "@/lib/types";
 import type { FilterOptionsByCategory } from "@/lib/admin/queries";
 import { cn } from "@/lib/utils";
+import { extractCoords } from "@/lib/maps-coords";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/icons";
 import { Modal } from "@/components/ui/modal";
 import { Field } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
+import { IconButton } from "@/components/admin/icon-button";
 import { PhotoUploader } from "@/components/admin/photo-uploader";
 import { PLACE_TYPES } from "@/components/admin/place-preview";
 import { upsertPlace } from "@/app/admin/(panel)/places/actions";
@@ -33,51 +35,6 @@ interface AreaOption {
 
 /** "+ Add new area…" sentinel value for the Area <select>. */
 const CUSTOM_AREA = "__custom__";
-
-/**
- * Extract a lat/lng pair from a Google Maps link or raw coordinate text.
- * Handles `@19.07,72.87` (Maps URL), `q=19.07,72.87`, `!3d19.07!4d72.87`,
- * and a plain `19.07, 72.87` pair. Returns null when nothing matches.
- */
-function extractCoords(text: string): { lat: number; lng: number } | null {
-  const inMumbai = (lat: number, lng: number) =>
-    Number.isFinite(lat) &&
-    Number.isFinite(lng) &&
-    lat >= -90 &&
-    lat <= 90 &&
-    lng >= -180 &&
-    lng <= 180;
-
-  const at = text.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-  if (at) {
-    const lat = Number(at[1]);
-    const lng = Number(at[2]);
-    if (inMumbai(lat, lng)) return { lat, lng };
-  }
-
-  const q = text.match(/\bq=(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
-  if (q) {
-    const lat = Number(q[1]);
-    const lng = Number(q[2]);
-    if (inMumbai(lat, lng)) return { lat, lng };
-  }
-
-  const bang = text.match(/!3d(-?\d+\.\d+).*?!4d(-?\d+\.\d+)/);
-  if (bang) {
-    const lat = Number(bang[1]);
-    const lng = Number(bang[2]);
-    if (inMumbai(lat, lng)) return { lat, lng };
-  }
-
-  const plain = text.match(/^\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*$/);
-  if (plain) {
-    const lat = Number(plain[1]);
-    const lng = Number(plain[2]);
-    if (inMumbai(lat, lng)) return { lat, lng };
-  }
-
-  return null;
-}
 
 const MapPicker = dynamic(() => import("./map-picker"), {
   ssr: false,
@@ -200,6 +157,7 @@ export function PlaceEditor({
   const [mustTryText, setMustTryText] = useState(
     () => (place?.must_try ?? []).join("\n")
   );
+  const [reels, setReels] = useState<string[]>(() => place?.reels ?? []);
 
   // Area options: server list, plus any area added inline this session.
   const [areaOptions, setAreaOptions] = useState<AreaOption[]>(() =>
@@ -213,6 +171,10 @@ export function PlaceEditor({
   const [locSearching, startLocSearch] = useTransition();
   const [locError, setLocError] = useState(false);
   const [flyTo, setFlyTo] = useState<{ lat: number; lng: number } | null>(null);
+  const [addrSuggest, setAddrSuggest] = useState<{
+    address: string | null;
+    area: string | null;
+  } | null>(null);
 
   const defaultValues: PlaceFormValues = useMemo(() => {
     if (place) {
@@ -236,6 +198,7 @@ export function PlaceEditor({
         serviceRating: place.service_rating ?? 4,
         ambienceRating: place.ambience_rating ?? 4,
         mustTry: place.must_try ?? [],
+        reels: place.reels ?? [],
         curatorNote: place.curator_note ?? "",
         bestTime: place.best_time ?? "",
         liveMusic: place.live_music,
@@ -265,6 +228,7 @@ export function PlaceEditor({
       serviceRating: 4,
       ambienceRating: 4,
       mustTry: [],
+      reels: [],
       curatorNote: prefill?.note ?? "",
       bestTime: "",
       liveMusic: false,
@@ -275,7 +239,7 @@ export function PlaceEditor({
     };
   }, [place, prefill, filters]);
 
-  const { register, handleSubmit, watch, setValue } = useForm<
+  const { register, handleSubmit, watch, setValue, getValues } = useForm<
     PlaceFormValues,
     unknown,
     PlaceInput
@@ -316,6 +280,18 @@ export function PlaceEditor({
     );
   };
 
+  const setReel = (index: number, value: string) => {
+    setReels((prev) => prev.map((r, i) => (i === index ? value : r)));
+  };
+
+  const removeReel = (index: number) => {
+    setReels((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const addReel = () => {
+    setReels((prev) => [...prev, ""]);
+  };
+
   const cuisineCount = filters.cuisine.filter((o) => tagIds.includes(o.id)).length;
   const vibeCount = filters.vibe.filter((o) => tagIds.includes(o.id)).length;
 
@@ -323,6 +299,24 @@ export function PlaceEditor({
     setValue("lat", newLat);
     setValue("lng", newLng);
     setFlyTo({ lat: newLat, lng: newLng });
+    // Fire-and-forget reverse geocode to suggest an address/area.
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/admin/resolve-location?reverse=1&lat=${newLat}&lng=${newLng}`
+        );
+        if (!res.ok) {
+          setAddrSuggest(null);
+          return;
+        }
+        const data = (await res.json()) as
+          | { address: string | null; area: string | null }
+          | { error: string };
+        setAddrSuggest("error" in data ? null : data);
+      } catch {
+        setAddrSuggest(null);
+      }
+    })();
   };
 
   const runLocationSearch = () => {
@@ -333,6 +327,34 @@ export function PlaceEditor({
     const coords = extractCoords(text);
     if (coords) {
       applyLocation(coords.lat, coords.lng);
+      return;
+    }
+
+    if (/^https?:\/\//i.test(text)) {
+      startLocSearch(async () => {
+        try {
+          const res = await fetch(
+            `/api/admin/resolve-location?url=${encodeURIComponent(text)}`
+          );
+          if (!res.ok) {
+            setLocError(true);
+            return;
+          }
+          const data = (await res.json()) as
+            | { lat: number; lng: number; name?: string }
+            | { error: string };
+          if ("error" in data) {
+            setLocError(true);
+            return;
+          }
+          applyLocation(data.lat, data.lng);
+          if (data.name && !(getValues("address") ?? "").trim()) {
+            setValue("address", data.name);
+          }
+        } catch {
+          setLocError(true);
+        }
+      });
       return;
     }
 
@@ -355,6 +377,18 @@ export function PlaceEditor({
         setLocError(true);
       }
     });
+  };
+
+  const useSuggestedAddress = () => {
+    if (!addrSuggest?.address) return;
+    setValue("address", addrSuggest.address);
+    if (addrSuggest.area) {
+      const match = areaOptions.find(
+        (a) => a.label.toLowerCase() === addrSuggest.area!.toLowerCase()
+      );
+      if (match) setValue("areaId", match.id);
+    }
+    setAddrSuggest(null);
   };
 
   const onAreaSelect = (value: string) => {
@@ -400,6 +434,10 @@ export function PlaceEditor({
         .split("\n")
         .map((line) => line.trim())
         .filter(Boolean)
+    );
+    setValue(
+      "reels",
+      reels.map((r) => r.trim()).filter(Boolean)
     );
     void handleSubmit(
       (data) => {
@@ -760,6 +798,62 @@ export function PlaceEditor({
           </Field>
         </div>
 
+        <div className="ad-span2">
+          <Field
+            label="Reels (Instagram / YouTube)"
+            note="Paste reel/short URLs — shown on the place page."
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {reels.map((reel, i) => {
+                const invalid =
+                  reel.trim().length > 0 && !/^https?:\/\//i.test(reel.trim());
+                return (
+                  <div key={i}>
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 6 }}
+                    >
+                      <input
+                        className="gb-input"
+                        placeholder="https://www.instagram.com/reel/…"
+                        value={reel}
+                        onChange={(e) => setReel(i, e.target.value)}
+                      />
+                      <IconButton
+                        icon="x"
+                        title="Remove reel"
+                        danger
+                        size={14}
+                        strokeWidth={2.4}
+                        onClick={() => removeReel(i)}
+                      />
+                    </div>
+                    {invalid && (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: "#B4514B",
+                        }}
+                      >
+                        Should start with http(s)://
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+              <div>
+                <button
+                  type="button"
+                  className="gb-btn gb-btn-sm"
+                  onClick={addReel}
+                >
+                  <Icon name="plus" size={13} strokeWidth={2.6} /> Add reel link
+                </button>
+              </div>
+            </div>
+          </Field>
+        </div>
+
         <div
           className="ad-span2"
           style={{
@@ -841,7 +935,7 @@ export function PlaceEditor({
             <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
               <input
                 className="gb-input"
-                placeholder="Search address, or paste a Google Maps link / lat,lng"
+                placeholder="Paste a Google Maps share link, address, or lat,lng"
                 value={locQuery}
                 onChange={(e) => {
                   setLocQuery(e.target.value);
@@ -875,6 +969,27 @@ export function PlaceEditor({
                 Couldn’t find that location.
               </p>
             )}
+            {addrSuggest?.address && (
+              <p
+                style={{
+                  fontSize: 12,
+                  color: "var(--gb-mut)",
+                  margin: "0 0 8px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                📍 {addrSuggest.address} —{" "}
+                <button
+                  type="button"
+                  className="gb-link"
+                  onClick={useSuggestedAddress}
+                >
+                  Use
+                </button>
+              </p>
+            )}
             <MapPicker
               lat={lat ?? null}
               lng={lng ?? null}
@@ -884,6 +999,15 @@ export function PlaceEditor({
                 setValue("lng", newLng);
               }}
             />
+            <p
+              style={{
+                fontSize: 11,
+                color: "var(--gb-mut)",
+                margin: "6px 0 0",
+              }}
+            >
+              Tip: tap the map or drag the pin to set the exact spot.
+            </p>
           </Field>
         </div>
       </div>

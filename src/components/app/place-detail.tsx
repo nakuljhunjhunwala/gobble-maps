@@ -30,6 +30,51 @@ import type { ConsumerPlace } from "@/lib/consumer/types";
 
 const DetailMap = dynamic(() => import("./detail-map"), { ssr: false });
 
+type ReelInfo = {
+  kind: "youtube" | "instagram" | "link";
+  thumb?: string;
+};
+
+function detectReel(url: string): ReelInfo {
+  let host = "";
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    host = "";
+  }
+
+  if (
+    host.includes("youtube.com") ||
+    host.includes("youtu.be") ||
+    host.includes("youtube-nocookie.com")
+  ) {
+    const id =
+      url.match(/[?&]v=([\w-]{11})/)?.[1] ??
+      url.match(/youtu\.be\/([\w-]{11})/)?.[1] ??
+      url.match(/\/shorts\/([\w-]{11})/)?.[1] ??
+      null;
+    if (id) {
+      return {
+        kind: "youtube",
+        thumb: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
+      };
+    }
+    return { kind: "youtube" };
+  }
+
+  if (host.includes("instagram.com")) {
+    return { kind: "instagram" };
+  }
+
+  return { kind: "link" };
+}
+
+const REEL_LABELS: Record<ReelInfo["kind"], string> = {
+  youtube: "YouTube",
+  instagram: "Instagram",
+  link: "Reel",
+};
+
 export interface PlaceDetailProps {
   place: ConsumerPlace;
 }
@@ -521,6 +566,50 @@ export function PlaceDetail({ place }: PlaceDetailProps) {
             Curated by {CURATOR.name}
             <Icon name="arrowUR" size={10} color="var(--gb-mut)" strokeWidth={2.2} />
           </a>
+        )}
+
+        {/* reels */}
+        {place.reels.length > 0 && (
+          <section
+            style={{ display: "flex", flexDirection: "column", gap: 10 }}
+          >
+            <p className="gb-flabel">Reels</p>
+            <div
+              className="gb-rail"
+              style={{ padding: 0, marginLeft: -2, marginRight: -2 }}
+            >
+              {place.reels.map((url) => {
+                const reel = detectReel(url);
+                const style =
+                  reel.kind === "youtube" && reel.thumb
+                    ? {
+                        backgroundColor: "var(--gb-sky-100)",
+                        backgroundImage: `url(${reel.thumb})`,
+                      }
+                    : {
+                        background:
+                          "linear-gradient(150deg, var(--gb-sky), var(--gb-sky-deep))",
+                      };
+                return (
+                  <a
+                    key={url}
+                    className="gb-reel-card"
+                    target="_blank"
+                    rel="noreferrer"
+                    href={url}
+                    style={style}
+                  >
+                    <span className="gb-reel-badge">
+                      {REEL_LABELS[reel.kind]}
+                    </span>
+                    <span className="gb-reel-play">
+                      <Icon name="play" size={20} />
+                    </span>
+                  </a>
+                );
+              })}
+            </div>
+          </section>
         )}
 
         {/* details */}

@@ -88,6 +88,7 @@ export function mapRowToConsumerPlace(
     boardGames: row.board_games,
     pureVeg: row.pure_veg,
     meals: row.meals ?? [],
+    reels: row.reels ?? [],
     photoPaths: [...(row.photos ?? [])]
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((p) => p.storage_path),

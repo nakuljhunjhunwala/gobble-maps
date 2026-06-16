@@ -42,6 +42,7 @@ const ICON_PATHS = {
   edit: <path d="M16.5 4.5l3 3L8 19l-4 1 1-4L16.5 4.5z"/>,
   logout: <g><path d="M14 4H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h8"/><path d="M10 12h10M17 8.5l3.5 3.5L17 15.5"/></g>,
   offline: <g><path d="M1.5 1.5l21 21" /><path d="M5 10a11 11 0 0 1 4-2.5M2 7.5A15 15 0 0 1 5.6 5M12 14.5a4.5 4.5 0 0 1 3.5 1.6M22 7.5a15 15 0 0 0-7-3.9M18.8 10.7A11 11 0 0 0 14 8.3"/><circle cx="12" cy="20" r="1" fill="currentColor"/></g>,
+  play: <path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/>,
 } satisfies Record<string, ReactElement>;
 
 export type IconName = keyof typeof ICON_PATHS;
