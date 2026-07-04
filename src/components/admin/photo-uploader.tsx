@@ -66,22 +66,28 @@ export function PhotoUploader({
   const [urlMode, setUrlMode] = useState(false);
   const [urlValue, setUrlValue] = useState("");
 
-  /** Compress + upload a blob to Supabase Storage, then append the path. */
+  /** Compress + upload one blob to Supabase Storage; returns the path or null. */
+  const uploadOne = async (source: Blob): Promise<string | null> => {
+    const compressed = await compressImage(source);
+    const supabase = createClient();
+    const path = `${placeId}/${crypto.randomUUID()}.jpg`;
+    const { error: uploadError } = await supabase.storage
+      .from("place-photos")
+      .upload(path, compressed, { contentType: "image/jpeg" });
+    if (uploadError) {
+      setError(uploadError.message);
+      return null;
+    }
+    return path;
+  };
+
+  /** Single-image ingest (used by the "From URL" flow). */
   const ingest = async (source: Blob) => {
     setError("");
     setUploading(true);
     try {
-      const compressed = await compressImage(source);
-      const supabase = createClient();
-      const path = `${placeId}/${crypto.randomUUID()}.jpg`;
-      const { error: uploadError } = await supabase.storage
-        .from("place-photos")
-        .upload(path, compressed, { contentType: "image/jpeg" });
-      if (uploadError) {
-        setError(uploadError.message);
-        return;
-      }
-      onChange([...paths, path]);
+      const path = await uploadOne(source);
+      if (path) onChange([...paths, path]);
     } catch {
       setError("Couldn't process that image — try a different one.");
     } finally {
@@ -89,11 +95,35 @@ export function PhotoUploader({
     }
   };
 
+  /** Handles one or many selected files, uploading up to the remaining slots. */
   const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
     e.target.value = "";
-    if (!file || uploading || paths.length >= max) return;
-    await ingest(file);
+    if (files.length === 0 || uploading) return;
+    const room = max - paths.length;
+    if (room <= 0) return;
+    const toUpload = files.slice(0, room);
+    const skipped = files.length - toUpload.length;
+
+    setError("");
+    setUploading(true);
+    const added: string[] = [];
+    try {
+      for (const file of toUpload) {
+        const path = await uploadOne(file);
+        if (path) added.push(path);
+      }
+      if (added.length > 0) onChange([...paths, ...added]);
+      if (skipped > 0) {
+        setError(
+          `Only ${room} more photo${room === 1 ? "" : "s"} could be added (max ${max}).`
+        );
+      }
+    } catch {
+      setError("Couldn't process that image — try a different one.");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const onAddFromUrl = async () => {
@@ -175,7 +205,7 @@ export function PhotoUploader({
               onClick={() => fileRef.current?.click()}
             >
               <Icon name="plus" size={18} color="var(--gb-mut)" strokeWidth={2.2} />{" "}
-              Upload
+              Upload photos
             </button>
             <button
               type="button"
@@ -192,6 +222,7 @@ export function PhotoUploader({
           ref={fileRef}
           type="file"
           accept="image/*"
+          multiple
           style={{ display: "none" }}
           onChange={(e) => void onFile(e)}
         />

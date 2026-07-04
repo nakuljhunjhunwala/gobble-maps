@@ -8,23 +8,28 @@ import { useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { Icon } from "@/components/icons";
 
-/** Budget as 1–5 stars (₹ scale), filled in accent blue. */
+/**
+ * Budget as ₹ symbols (price tier, 1–5). Rendered as text — NOT stars — so it
+ * is never confused with the star rating.
+ */
 export function GBudget({ n, size = 11 }: { n: number; size?: number }) {
+  const tier = Math.max(1, Math.min(5, Math.round(n)));
   return (
     <span
-      style={{ display: "inline-flex", gap: 1, alignItems: "center" }}
-      title={`Budget ${n}/5`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        fontSize: size + 2,
+        fontWeight: 800,
+        letterSpacing: 0.5,
+        lineHeight: 1,
+        color: "var(--gb-sky-deep)",
+      }}
+      title={`Budget ${tier}/5`}
+      aria-label={`Budget ${tier} of 5`}
     >
-      {[1, 2, 3, 4, 5].map((i) => (
-        <Icon
-          key={i}
-          name="star"
-          size={size}
-          strokeWidth={1.6}
-          fill={i <= n ? "var(--gb-sky-deep)" : "none"}
-          color={i <= n ? "var(--gb-sky-deep)" : "var(--gb-line)"}
-        />
-      ))}
+      <span>{"₹".repeat(tier)}</span>
+      <span style={{ color: "var(--gb-line)" }}>{"₹".repeat(5 - tier)}</span>
     </span>
   );
 }
@@ -61,17 +66,13 @@ export function GVisitedBadge({
   visited: boolean;
   small?: boolean;
 }) {
-  return visited ? (
+  // Only the positive badge is shown; unvisited places display nothing
+  // (no "not yet visited" caution).
+  if (!visited) return null;
+  return (
     <span className={"gb-badge gb-badge-visited" + (small ? " gb-badge-sm" : "")}>
       <Icon name="check" size={small ? 10 : 12} strokeWidth={2.6} />{" "}
       {small ? "Visited" : "Personally visited"}
-    </span>
-  ) : (
-    <span
-      className={"gb-badge gb-badge-unvisited" + (small ? " gb-badge-sm" : "")}
-    >
-      <Icon name="info" size={small ? 10 : 12} strokeWidth={2} />{" "}
-      {small ? "Not yet visited" : "Not yet visited by curator"}
     </span>
   );
 }

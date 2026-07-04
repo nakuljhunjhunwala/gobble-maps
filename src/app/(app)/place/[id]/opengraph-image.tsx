@@ -141,7 +141,7 @@ export default async function Image({ params }: Props) {
               <svg width="34" height="34" viewBox="0 0 24 24" fill="#fff">
                 <path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7-6.2-3.7-6.2 3.7 1.6-7L2 9.2l7.1-.6z" />
               </svg>
-              {`${place.ratings.avg} / 5`}
+              {`${place.ratings.avg} / 10`}
             </div>
           ) : null}
           <div

@@ -99,8 +99,6 @@ const CLOSED_WEEK: PlaceFormValues["hours"] = {
   sun: null,
 };
 
-const RATING_OPTIONS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
-
 /** First human-readable message in an RHF errors tree. */
 function firstErrorMessage(node: unknown, depth = 0): string | null {
   if (!node || typeof node !== "object" || depth > 3) return null;
@@ -190,13 +188,15 @@ export function PlaceEditor({
         phone: place.phone ?? "",
         instagram: place.instagram ?? "",
         website: place.website ?? "",
+        zomato: place.zomato ?? "",
+        swiggy: place.swiggy ?? "",
         hours: { ...CLOSED_WEEK, ...place.hours },
         meals: place.meals,
         tagIds: place.tags.map((t) => t.id),
         visited: place.visited,
-        foodRating: place.food_rating ?? 4,
-        serviceRating: place.service_rating ?? 4,
-        ambienceRating: place.ambience_rating ?? 4,
+        foodRating: place.food_rating ?? 8,
+        serviceRating: place.service_rating ?? 8,
+        ambienceRating: place.ambience_rating ?? 8,
         mustTry: place.must_try ?? [],
         reels: place.reels ?? [],
         curatorNote: place.curator_note ?? "",
@@ -220,13 +220,15 @@ export function PlaceEditor({
       phone: "",
       instagram: "",
       website: "",
+      zomato: "",
+      swiggy: "",
       hours: defaultHours(),
       meals: ["dinner"],
       tagIds: [],
       visited: prefill ? true : false,
-      foodRating: 4,
-      serviceRating: 4,
-      ambienceRating: 4,
+      foodRating: 8,
+      serviceRating: 8,
+      ambienceRating: 8,
       mustTry: [],
       reels: [],
       curatorNote: prefill?.note ?? "",
@@ -254,9 +256,9 @@ export function PlaceEditor({
   const hours = watch("hours");
   const tagIds = watch("tagIds") ?? [];
   const visited = watch("visited") ?? false;
-  const foodRating = watch("foodRating") ?? 4;
-  const serviceRating = watch("serviceRating") ?? 4;
-  const ambienceRating = watch("ambienceRating") ?? 4;
+  const foodRating = watch("foodRating") ?? 8;
+  const serviceRating = watch("serviceRating") ?? 8;
+  const ambienceRating = watch("ambienceRating") ?? 8;
   const liveMusic = watch("liveMusic") ?? false;
   const boardGames = watch("boardGames") ?? false;
   const pureVeg = watch("pureVeg") ?? false;
@@ -471,17 +473,22 @@ export function PlaceEditor({
     field: "foodRating" | "serviceRating" | "ambienceRating",
     value: number
   ) => (
-    <select
+    <input
       className="gb-input"
+      type="number"
+      inputMode="decimal"
+      min={1}
+      max={10}
+      step={0.1}
       value={value}
-      onChange={(e) => setValue(field, Number(e.target.value))}
-    >
-      {RATING_OPTIONS.map((n) => (
-        <option key={n} value={n}>
-          {n}
-        </option>
-      ))}
-    </select>
+      onChange={(e) => {
+        const raw = e.target.value;
+        if (raw === "") return;
+        // Clamp to 1–10 and keep one decimal.
+        const n = Math.min(10, Math.max(1, Number(raw)));
+        setValue(field, Math.round(n * 10) / 10);
+      }}
+    />
   );
 
   const switchRow = (label: string, on: boolean, set: (v: boolean) => void) => (
@@ -651,7 +658,7 @@ export function PlaceEditor({
           >
             {[1, 2, 3, 4, 5].map((n) => (
               <option key={n} value={n}>
-                {"★".repeat(n)} ({n}/5)
+                {"₹".repeat(n)} ({n}/5)
               </option>
             ))}
           </select>
@@ -668,6 +675,20 @@ export function PlaceEditor({
         </Field>
         <Field label="Website (optional)">
           <input className="gb-input" {...register("website")} />
+        </Field>
+        <Field label="Zomato link (optional)">
+          <input
+            className="gb-input"
+            placeholder="https://zomato.com/…"
+            {...register("zomato")}
+          />
+        </Field>
+        <Field label="Swiggy link (optional)">
+          <input
+            className="gb-input"
+            placeholder="https://swiggy.com/…"
+            {...register("swiggy")}
+          />
         </Field>
         <div className="ad-span2">
           <Field label="Address">
@@ -788,7 +809,7 @@ export function PlaceEditor({
 
         <div className="ad-span2">
           <Field
-            label={`Photos (${photoPaths.length} of 6 — minimum 4 to publish)`}
+            label={`Photos (${photoPaths.length} of 6)`}
           >
             <PhotoUploader
               placeId={placeId}
@@ -868,6 +889,7 @@ export function PlaceEditor({
           {switchRow("Personally visited by curator", visited, (v) =>
             setValue("visited", v)
           )}
+          {/* Ratings only apply to personally-visited places. */}
           {visited && (
             <>
               <div
@@ -877,39 +899,40 @@ export function PlaceEditor({
                   gap: 10,
                 }}
               >
-                <Field label="Food /5">
+                <Field label="Food /10">
                   {ratingSelect("foodRating", foodRating)}
                 </Field>
-                <Field label="Service /5">
+                <Field label="Service /10">
                   {ratingSelect("serviceRating", serviceRating)}
                 </Field>
-                <Field label="Ambience /5">
+                <Field label="Ambience /10">
                   {ratingSelect("ambienceRating", ambienceRating)}
                 </Field>
               </div>
               <p className="ad-sub" style={{ marginTop: -4 }}>
-                Average auto-calculated: <strong>{avgRating}/5</strong>
+                Average auto-calculated: <strong>{avgRating}/10</strong>
               </p>
-              <Field label="Must-try dishes (one per line)">
-                <textarea
-                  className="gb-input"
-                  rows={3}
-                  value={mustTryText}
-                  onChange={(e) => setMustTryText(e.target.value)}
-                ></textarea>
-              </Field>
-              <Field label="Curator's note">
-                <textarea
-                  className="gb-input"
-                  rows={2}
-                  {...register("curatorNote")}
-                ></textarea>
-              </Field>
-              <Field label="Best time to visit">
-                <input className="gb-input" {...register("bestTime")} />
-              </Field>
             </>
           )}
+          {/* Curator content shows on the site whether or not visited. */}
+          <Field label="Must-try dishes (one per line)">
+            <textarea
+              className="gb-input"
+              rows={3}
+              value={mustTryText}
+              onChange={(e) => setMustTryText(e.target.value)}
+            ></textarea>
+          </Field>
+          <Field label="Curator's note">
+            <textarea
+              className="gb-input"
+              rows={2}
+              {...register("curatorNote")}
+            ></textarea>
+          </Field>
+          <Field label="Best time to visit">
+            <input className="gb-input" {...register("bestTime")} />
+          </Field>
         </div>
 
         <div

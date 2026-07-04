@@ -83,14 +83,9 @@ export function PlacePreview({ place, onClose }: PlacePreviewProps) {
           <span className="gb-badge gb-badge-type">
             {PLACE_TYPES[place.type].label}
           </span>
-          {place.visited ? (
+          {place.visited && (
             <span className="gb-badge gb-badge-visited">
               <Icon name="check" size={11} strokeWidth={2.6} /> Personally visited
-            </span>
-          ) : (
-            <span className="gb-badge gb-badge-unvisited">
-              <Icon name="info" size={11} strokeWidth={2} /> Not yet visited by
-              curator
             </span>
           )}
         </div>
@@ -100,17 +95,17 @@ export function PlacePreview({ place, onClose }: PlacePreviewProps) {
           </h3>
           <p className="ad-sub">
             {cuisines.join(", ") || "No cuisine tags"} ·{" "}
-            {place.area?.label ?? "—"} · {"★".repeat(place.budget)}
+            {place.area?.label ?? "—"} · {"₹".repeat(place.budget)}
           </p>
         </div>
         {hasRatings && (
           <p style={{ fontSize: 13 }}>
             Food <strong>{place.food_rating}</strong> · Service{" "}
             <strong>{place.service_rating}</strong> · Ambience{" "}
-            <strong>{place.ambience_rating}</strong> · Avg <strong>{avg}/5</strong>
+            <strong>{place.ambience_rating}</strong> · Avg <strong>{avg}/10</strong>
           </p>
         )}
-        {place.visited && place.curator_note && (
+        {place.curator_note && (
           <p style={{ fontSize: 13, lineHeight: 1.5, color: "var(--gb-ink)" }}>
             “{place.curator_note}”
           </p>

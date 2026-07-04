@@ -84,6 +84,8 @@ export interface PlaceRow {
   phone: string | null;
   instagram: string | null;
   website: string | null;
+  zomato: string | null;
+  swiggy: string | null;
   hours: HoursJson;
   meals: MealSlot[];
   visited: boolean;

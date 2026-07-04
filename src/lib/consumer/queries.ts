@@ -76,6 +76,8 @@ export function mapRowToConsumerPlace(
     phone: row.phone,
     instagram: row.instagram,
     website: row.website,
+    zomato: row.zomato,
+    swiggy: row.swiggy,
     hours: row.hours ?? null,
     lat: row.lat,
     lng: row.lng,

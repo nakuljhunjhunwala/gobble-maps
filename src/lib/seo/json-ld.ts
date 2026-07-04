@@ -119,7 +119,7 @@ export function placeJsonLd(place: ConsumerPlace): string {
           reviewRating: {
             "@type": "Rating",
             ratingValue: place.ratings.avg,
-            bestRating: 5,
+            bestRating: 10,
             worstRating: 1,
           },
         }

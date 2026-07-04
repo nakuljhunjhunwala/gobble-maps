@@ -30,6 +30,11 @@ import type { ConsumerPlace } from "@/lib/consumer/types";
 
 const DetailMap = dynamic(() => import("./detail-map"), { ssr: false });
 
+/** Ensure a stored link opens as an absolute URL. */
+function httpUrl(url: string): string {
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
+
 type ReelInfo = {
   kind: "youtube" | "instagram" | "link";
   thumb?: string;
@@ -155,7 +160,7 @@ export function PlaceDetail({ place }: PlaceDetailProps) {
       >
         <div
           style={{
-            width: (val / 5) * 100 + "%",
+            width: (val / 10) * 100 + "%",
             height: "100%",
             borderRadius: 99,
             background: "var(--gb-sky-deep)",
@@ -167,11 +172,11 @@ export function PlaceDetail({ place }: PlaceDetailProps) {
           fontSize: 12.5,
           fontWeight: 700,
           color: "var(--gb-ink)",
-          width: 28,
+          width: 34,
           textAlign: "right",
         }}
       >
-        {val}/5
+        {val}/10
       </span>
     </div>
   );
@@ -372,19 +377,8 @@ export function PlaceDetail({ place }: PlaceDetailProps) {
           )}
         </div>
 
-        {/* unvisited notice */}
-        {!place.visited && (
-          <div className="gb-infobox">
-            <Icon name="info" size={16} strokeWidth={2} />
-            <span>
-              <strong>Not yet visited by curator</strong> — info sourced from
-              public listings (Zomato / Google). No personal rating yet.
-            </span>
-          </div>
-        )}
-
-        {/* curator ratings */}
-        {place.visited && place.ratings && (
+        {/* curator ratings (only present for visited places) */}
+        {place.ratings && (
           <section className="gb-panel">
             <p className="gb-flabel" style={{ marginBottom: 10 }}>
               Curator&apos;s ratings
@@ -447,8 +441,9 @@ export function PlaceDetail({ place }: PlaceDetailProps) {
           )}
         </div>
 
-        {/* curator's section */}
-        {place.visited && place.mustTry.length > 0 && (
+        {/* curator's section — shown whenever any curator content exists,
+            regardless of whether the place was personally visited */}
+        {(place.mustTry.length > 0 || place.note || place.bestTime) && (
           <section className="gb-panel gb-panel-sky">
             <p
               className="gb-flabel"
@@ -459,42 +454,44 @@ export function PlaceDetail({ place }: PlaceDetailProps) {
             <div
               style={{ display: "flex", flexDirection: "column", gap: 12 }}
             >
-              <div>
-                <p
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 700,
-                    color: "var(--gb-mut)",
-                    marginBottom: 6,
-                  }}
-                >
-                  MUST-TRY DISHES
-                </p>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 5,
-                  }}
-                >
-                  {place.mustTry.map((d) => (
-                    <span
-                      key={d}
-                      style={{
-                        display: "flex",
-                        gap: 8,
-                        alignItems: "center",
-                        fontSize: 13.5,
-                        color: "var(--gb-ink)",
-                        fontWeight: 600,
-                      }}
-                    >
-                      <Icon name="fork" size={13} color="var(--gb-sky-deep)" />{" "}
-                      {d}
-                    </span>
-                  ))}
+              {place.mustTry.length > 0 && (
+                <div>
+                  <p
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: "var(--gb-mut)",
+                      marginBottom: 6,
+                    }}
+                  >
+                    MUST-TRY DISHES
+                  </p>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 5,
+                    }}
+                  >
+                    {place.mustTry.map((d) => (
+                      <span
+                        key={d}
+                        style={{
+                          display: "flex",
+                          gap: 8,
+                          alignItems: "center",
+                          fontSize: 13.5,
+                          color: "var(--gb-ink)",
+                          fontWeight: 600,
+                        }}
+                      >
+                        <Icon name="fork" size={13} color="var(--gb-sky-deep)" />{" "}
+                        {d}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
               {place.note && (
                 <div>
                   <p
@@ -545,8 +542,11 @@ export function PlaceDetail({ place }: PlaceDetailProps) {
           </section>
         )}
 
-        {/* curator attribution — Tirth handpicked the visited places */}
-        {place.visited && (
+        {/* curator attribution — shown whenever there's curator content */}
+        {(place.mustTry.length > 0 ||
+          place.note ||
+          place.bestTime ||
+          place.ratings) && (
           <a
             href={CURATOR.instagramUrl}
             target="_blank"
@@ -633,6 +633,16 @@ export function PlaceDetail({ place }: PlaceDetailProps) {
               "@" + place.instagram,
               `https://instagram.com/${place.instagram}`
             )}
+          {place.website &&
+            detailRow(
+              "globe",
+              place.website.replace(/^https?:\/\//i, ""),
+              httpUrl(place.website)
+            )}
+          {place.zomato &&
+            detailRow("cart", "Order on Zomato", httpUrl(place.zomato))}
+          {place.swiggy &&
+            detailRow("cart", "Order on Swiggy", httpUrl(place.swiggy))}
           {place.address && detailRow("pinOutline", place.address)}
           {place.station &&
             detailRow("train", "Nearest station · " + place.station)}

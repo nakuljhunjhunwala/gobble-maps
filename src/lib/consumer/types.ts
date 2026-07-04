@@ -29,6 +29,8 @@ export interface ConsumerPlace {
   phone: string | null;
   instagram: string | null;
   website: string | null;
+  zomato: string | null;
+  swiggy: string | null;
   hours: HoursJson | null;
   lat: number | null;
   lng: number | null;

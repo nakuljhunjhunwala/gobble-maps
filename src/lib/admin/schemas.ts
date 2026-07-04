@@ -23,7 +23,7 @@ export const hoursSchema = z.record(
   dayHoursSchema
 );
 
-const ratingSchema = z.number().min(1).max(5).nullable().optional();
+const ratingSchema = z.number().min(1).max(10).nullable().optional();
 
 export const placeSchema = z
   .object({
@@ -45,6 +45,8 @@ export const placeSchema = z
     phone: z.string().trim().max(30).optional().default(""),
     instagram: z.string().trim().max(80).optional().default(""),
     website: z.string().trim().max(300).optional().default(""),
+    zomato: z.string().trim().max(300).optional().default(""),
+    swiggy: z.string().trim().max(300).optional().default(""),
     hours: hoursSchema,
     meals: z
       .array(z.enum(["breakfast", "lunch", "dinner", "brunch", "party"]))
@@ -64,17 +66,8 @@ export const placeSchema = z
     pureVeg: z.boolean().default(false),
     reels: z.array(z.string().trim().url().max(500)).max(12).default([]),
     intendedStatus: z.enum(["draft", "published", "permanently_closed"]),
-    // Number of photos currently uploaded for this place
+    // Number of photos currently uploaded for this place (no minimum).
     photoCount: z.number().int().min(0).max(6),
-  })
-  .superRefine((val, ctx) => {
-    if (val.intendedStatus === "published" && val.photoCount < 4) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["photoCount"],
-        message: "Please upload at least 4 photos before publishing.",
-      });
-    }
   });
 
 export type PlaceInput = z.infer<typeof placeSchema>;
