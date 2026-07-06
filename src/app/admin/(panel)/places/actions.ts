@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/admin/queries";
 import { placeSchema, type PlaceInput } from "@/lib/admin/schemas";
+import type { FilterCategory } from "@/lib/types";
+import { parseCsv } from "@/lib/admin/csv";
+import { csvRowToPlaceInput, splitList } from "@/lib/admin/place-csv";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -300,4 +303,255 @@ export async function deletePlace(placeId: string): Promise<ActionResult> {
 
   revalidatePath("/admin/places");
   return { ok: true };
+}
+
+// ── CSV import ───────────────────────────────────────────────
+
+export interface ImportRowError {
+  row: number;
+  name: string;
+  message: string;
+}
+
+export type ImportResult =
+  | { ok: false; error: string }
+  | {
+      ok: true;
+      created: number;
+      updated: number;
+      failed: number;
+      createdTags: string[];
+      errors: ImportRowError[];
+    };
+
+/**
+ * Bulk create/update places from a CSV (see src/lib/admin/place-csv.ts for the
+ * column contract). Rows with a blank `id` are created; a present `id` updates
+ * that place. Unknown cuisine/vibe/area labels are auto-created and reported.
+ * Photos are never touched (no image import) and NO push notifications fire —
+ * this is a bulk operation. Invalid rows are skipped and reported; valid rows
+ * still commit.
+ */
+export async function importPlaces(csvText: string): Promise<ImportResult> {
+  const { supabase } = await requireAdmin();
+
+  let matrix: string[][];
+  try {
+    matrix = parseCsv(csvText);
+  } catch {
+    return { ok: false, error: "Could not parse the CSV file." };
+  }
+  if (matrix.length < 2) {
+    return { ok: false, error: "CSV has a header but no data rows." };
+  }
+
+  const headers = matrix[0].map((h) => h.trim().toLowerCase());
+  if (!headers.includes("name") || !headers.includes("type")) {
+    return {
+      ok: false,
+      error: "CSV must include at least 'name' and 'type' columns.",
+    };
+  }
+
+  const records = matrix.slice(1).map((cols) => {
+    const rec: Record<string, string> = {};
+    headers.forEach((h, i) => {
+      rec[h] = cols[i] ?? "";
+    });
+    return rec;
+  });
+
+  // 1. Load all filter_options → case-insensitive label→id maps per category.
+  const { data: opts, error: optErr } = await supabase
+    .from("filter_options")
+    .select("id, category, label, sort_order");
+  if (optErr) {
+    return { ok: false, error: optErr.message };
+  }
+  const maps: Record<FilterCategory, Map<string, string>> = {
+    cuisine: new Map(),
+    vibe: new Map(),
+    area: new Map(),
+  };
+  let maxSort = 0;
+  for (const o of (opts ?? []) as {
+    id: string;
+    category: FilterCategory;
+    label: string;
+    sort_order: number;
+  }[]) {
+    maps[o.category].set(o.label.toLowerCase(), o.id);
+    if (o.sort_order > maxSort) maxSort = o.sort_order;
+  }
+
+  // 2. Collect referenced labels; create the ones that don't exist yet.
+  const referenced: Record<FilterCategory, Map<string, string>> = {
+    cuisine: new Map(),
+    vibe: new Map(),
+    area: new Map(),
+  };
+  for (const rec of records) {
+    for (const l of splitList(rec["cuisines"] ?? "")) {
+      referenced.cuisine.set(l.toLowerCase(), l);
+    }
+    for (const l of splitList(rec["vibes"] ?? "")) {
+      referenced.vibe.set(l.toLowerCase(), l);
+    }
+    const area = (rec["area"] ?? "").trim();
+    if (area) referenced.area.set(area.toLowerCase(), area);
+  }
+  const toCreate: { category: FilterCategory; label: string; sort_order: number }[] =
+    [];
+  for (const category of ["cuisine", "vibe", "area"] as FilterCategory[]) {
+    for (const [lower, original] of referenced[category]) {
+      if (!maps[category].has(lower)) {
+        maxSort += 1;
+        toCreate.push({ category, label: original, sort_order: maxSort });
+      }
+    }
+  }
+  const createdTags: string[] = [];
+  if (toCreate.length > 0) {
+    const { data: inserted, error: insErr } = await supabase
+      .from("filter_options")
+      .upsert(toCreate, { onConflict: "category,label" })
+      .select("id, category, label");
+    if (insErr) {
+      return {
+        ok: false,
+        error: `Could not create filter options: ${insErr.message}`,
+      };
+    }
+    for (const o of (inserted ?? []) as {
+      id: string;
+      category: FilterCategory;
+      label: string;
+    }[]) {
+      maps[o.category].set(o.label.toLowerCase(), o.id);
+      createdTags.push(`${o.category}: ${o.label}`);
+    }
+  }
+
+  const resolve = (category: FilterCategory, label: string) =>
+    maps[category].get(label.trim().toLowerCase());
+
+  // 3. Classify create vs update against existing ids.
+  const { data: existingRows, error: exErr } = await supabase
+    .from("places")
+    .select("id");
+  if (exErr) {
+    return { ok: false, error: exErr.message };
+  }
+  const existingIds = new Set((existingRows ?? []).map((r) => r.id as string));
+
+  let created = 0;
+  let updated = 0;
+  const errors: ImportRowError[] = [];
+
+  for (let idx = 0; idx < records.length; idx++) {
+    const rec = records[idx];
+    const rowNum = idx + 2; // 1-based, accounting for the header row
+    const nameForMsg = (rec["name"] ?? "").trim() || `(row ${rowNum})`;
+
+    const raw = csvRowToPlaceInput(rec, resolve);
+
+    const idParsed = z.uuid().optional().safeParse(raw.id);
+    if (!idParsed.success) {
+      errors.push({
+        row: rowNum,
+        name: nameForMsg,
+        message: "Invalid id — must be a UUID or left blank.",
+      });
+      continue;
+    }
+    const parsed = placeSchema.safeParse(raw);
+    if (!parsed.success) {
+      errors.push({
+        row: rowNum,
+        name: nameForMsg,
+        message: parsed.error.issues[0]?.message ?? "Invalid row.",
+      });
+      continue;
+    }
+    const d = parsed.data;
+    const id = idParsed.data ?? crypto.randomUUID();
+    const isUpdate = existingIds.has(id);
+
+    const { error: upsertError } = await supabase.from("places").upsert({
+      id,
+      name: d.name,
+      type: d.type,
+      budget: d.budget,
+      area_id: d.areaId ?? null,
+      station: d.station || null,
+      address: d.address || null,
+      lat: d.lat ?? null,
+      lng: d.lng ?? null,
+      phone: d.phone || null,
+      instagram: d.instagram || null,
+      website: d.website || null,
+      zomato: d.zomato || null,
+      swiggy: d.swiggy || null,
+      hours: d.hours,
+      meals: d.meals,
+      visited: d.visited,
+      food_rating: d.visited ? (d.foodRating ?? null) : null,
+      service_rating: d.visited ? (d.serviceRating ?? null) : null,
+      ambience_rating: d.visited ? (d.ambienceRating ?? null) : null,
+      must_try: d.mustTry,
+      curator_note: d.curatorNote || null,
+      best_time: d.bestTime || null,
+      live_music: d.liveMusic,
+      board_games: d.boardGames,
+      pure_veg: d.pureVeg,
+      reels: d.reels,
+      status: d.intendedStatus,
+      updated_at: new Date().toISOString(),
+    });
+    if (upsertError) {
+      errors.push({ row: rowNum, name: nameForMsg, message: upsertError.message });
+      continue;
+    }
+
+    // Replace place_tags (upsert new set, then delete stale) — no photos.
+    if (d.tagIds.length > 0) {
+      const { error: insTagsError } = await supabase.from("place_tags").upsert(
+        d.tagIds.map((tagId) => ({ place_id: id, filter_option_id: tagId })),
+        { onConflict: "place_id,filter_option_id" }
+      );
+      if (insTagsError) {
+        errors.push({ row: rowNum, name: nameForMsg, message: insTagsError.message });
+        continue;
+      }
+    }
+    const { data: existingTags } = await supabase
+      .from("place_tags")
+      .select("filter_option_id")
+      .eq("place_id", id);
+    const kept = new Set(d.tagIds);
+    const staleTagIds = (existingTags ?? [])
+      .map((t) => t.filter_option_id as string)
+      .filter((tagId) => !kept.has(tagId));
+    if (staleTagIds.length > 0) {
+      await supabase
+        .from("place_tags")
+        .delete()
+        .eq("place_id", id)
+        .in("filter_option_id", staleTagIds);
+    }
+
+    existingIds.add(id);
+    if (isUpdate) updated += 1;
+    else created += 1;
+  }
+
+  revalidatePath("/admin/places");
+  return {
+    ok: true,
+    created,
+    updated,
+    failed: errors.length,
+    createdTags,
+    errors,
+  };
 }

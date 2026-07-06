@@ -15,6 +15,7 @@ import { useToast } from "@/components/ui/toast";
 import { PlaceEditor, type PlacePrefill } from "@/components/admin/place-editor";
 import { PlacePreview, PLACE_TYPES } from "@/components/admin/place-preview";
 import { publicPhotoUrl } from "@/components/admin/photo-uploader";
+import { ImportDialog } from "@/components/admin/import-dialog";
 import { deletePlace, markClosed } from "@/app/admin/(panel)/places/actions";
 
 const STATUS_LABEL: Record<PlaceStatus, string> = {
@@ -65,6 +66,7 @@ export function PlacesManager({
   const [q, setQ] = useState("");
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
   const [preview, setPreview] = useState<PlaceWithRelations | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [editor, setEditor] = useState<EditorState | null>(() => {
     if (initialEditId) return { placeId: initialEditId, prefill: null };
     if (initialPrefill) return { placeId: null, prefill: initialPrefill };
@@ -132,12 +134,28 @@ export function PlacesManager({
         title="Places"
         sub={`${places.length} places · add, edit, publish & retire listings`}
       >
-        <button
-          className="gb-btn gb-btn-sm"
-          onClick={() => setEditor({ placeId: null, prefill: null })}
-        >
-          <Icon name="plus" size={14} strokeWidth={2.6} /> Add new place
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <a
+            className="gb-btn gb-btn-sm"
+            href="/api/admin/places/export"
+            style={{ background: "#EFF3F6", color: "var(--gb-ink)" }}
+          >
+            <Icon name="share" size={14} /> Export CSV
+          </a>
+          <button
+            className="gb-btn gb-btn-sm"
+            style={{ background: "#EFF3F6", color: "var(--gb-ink)" }}
+            onClick={() => setImportOpen(true)}
+          >
+            <Icon name="list" size={14} /> Import CSV
+          </button>
+          <button
+            className="gb-btn gb-btn-sm"
+            onClick={() => setEditor({ placeId: null, prefill: null })}
+          >
+            <Icon name="plus" size={14} strokeWidth={2.6} /> Add new place
+          </button>
+        </div>
       </PageHeader>
 
       <div className="ad-toolbar">
@@ -266,6 +284,8 @@ export function PlacesManager({
       {preview && (
         <PlacePreview place={preview} onClose={() => setPreview(null)} />
       )}
+
+      {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
     </div>
   );
 }
